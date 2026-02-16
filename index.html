@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智能分商點貨系統 - 完整版</title>
+    <title>智能分商點貨系統 - 完整修復版</title>
     <!-- 依序加載核心庫 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 使用 vanilla lucide 庫以獲得最佳相容性 -->
+    <!-- 使用 vanilla lucide 核心庫（最穩定，不依賴 forwardRef） -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
@@ -48,15 +48,19 @@
 
     <script type="text/babel">
         /**
-         * 由於 lucide-react UMD 版本不穩定
-         * 我們建立一個自定義 Icon 組件，直接從 lucide 核心庫讀取 SVG
+         * 修正圖標遺失的核心組件
+         * 直接從 window.lucide.icons 取得 SVG 結構進行渲染，避開 UMD 相容性問題
          */
-        const Icon = ({ name, className = "w-5 h-5", color = "currentColor" }) => {
-            const iconName = name.charAt(0).toLowerCase() + name.slice(1).replace(/([A-Z])/g, "-$1").toLowerCase();
-            const svgContent = window.lucide.icons[iconName] ? window.lucide.icons[iconName][2] : '';
+        const Icon = ({ name, className = "w-5 h-5", stroke = "currentColor" }) => {
+            // 轉換 PascalCase 為 kebab-case (例如: ChevronLeft -> chevron-left)
+            const iconName = name.replace(/([A-Z0-9])/g, "-$1").toLowerCase().replace(/^-/, "");
+            const iconData = window.lucide && window.lucide.icons ? window.lucide.icons[iconName] : null;
             
-            if (!svgContent) return <div className={className} />;
+            if (!iconData) {
+                return <div className={`${className} bg-slate-200 rounded-full flex items-center justify-center text-[8px]`}>?</div>;
+            }
 
+            // iconData 結構為 ["svg", {attrs}, [[tag, {attrs}], ...]]
             return (
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -64,13 +68,17 @@
                     height="24"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke={color}
+                    stroke={stroke}
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     className={className}
-                    dangerouslySetInnerHTML={{ __html: svgContent }}
-                />
+                >
+                    {iconData[2].map((child, idx) => {
+                        const TagName = child[0];
+                        return <TagName key={idx} {...child[1]} />;
+                    })}
+                </svg>
             );
         };
 
@@ -265,7 +273,7 @@
                                 <button onClick={() => setView('zone_select')} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-lg shadow-xl flex items-center justify-center gap-3 active-scale transition-all">
                                     開始點貨 <Icon name="ArrowRight" className="text-white" />
                                 </button>
-                                <button onClick={() => { setView('admin'); setAdminTab('ingredients'); }} className="w-full py-3 text-slate-400 font-bold text-xs flex items-center justify-center gap-2 hover:text-indigo-600 transition-colors">
+                                <button onClick={() => { setView('admin'); setAdminTab('ingredients'); }} className="w-full py-3 text-slate-400 font-bold text-xs flex items-center justify-center gap-2 hover:text-indigo-600 transition-colors text-center">
                                     <Icon name="Settings" className="w-4 h-4" /> 系統設定與食材管理
                                 </button>
                             </div>
@@ -329,15 +337,15 @@
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3 bg-slate-100/50 p-1.5 rounded-3xl shrink-0 ml-4">
-                                                <button onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: Math.max(0, cur - 1) }); }} className="w-10 h-10 bg-white rounded-2xl shadow-sm flex items-center justify-center active-scale">
-                                                    <Icon name="Minus" className="text-slate-400" />
+                                                <button onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: Math.max(0, cur - 1) }); }} className="w-10 h-10 bg-white rounded-2xl shadow-sm flex items-center justify-center active-scale text-slate-400 border border-slate-100">
+                                                    <Icon name="Minus" />
                                                 </button>
                                                 <div className="w-10 text-center">
                                                     <span className={`text-xl font-black ${qty === 0 ? 'text-slate-300' : 'text-indigo-600'}`}>{qty}</span>
                                                     <p className="text-[9px] text-slate-400 font-black">{item.unit}</p>
                                                 </div>
                                                 <button onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: cur + 1 }); }} className="w-10 h-10 bg-indigo-600 rounded-2xl shadow-lg flex items-center justify-center text-white active-scale">
-                                                    <Icon name="Plus" className="text-white" />
+                                                    <Icon name="Plus" />
                                                 </button>
                                             </div>
                                         </div>
@@ -384,7 +392,7 @@
                             <Nav title="系統管理" onBack={() => setView('setup')} />
                             <div className="flex bg-white border-b border-slate-100 px-4 py-3 gap-2 overflow-x-auto no-scrollbar shadow-sm sticky top-[61px] z-50">
                                 {[{ id: 'ingredients', label: '食材庫', icon: 'Layers' }, { id: 'vendors', label: '廠商', icon: 'Filter' }, { id: 'branches', label: '分店', icon: 'Building2' }].map(tab => (
-                                    <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`px-5 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap ${adminTab === tab.id ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}>
+                                    <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`px-5 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap ${adminTab === tab.id ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100'}`}>
                                         <Icon name={tab.icon} className="w-4 h-4" /> {tab.label}
                                     </button>
                                 ))}
