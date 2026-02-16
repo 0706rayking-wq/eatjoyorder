@@ -3,15 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智能分商點貨系統 - 完整修復版</title>
-    <!-- 依序加載核心庫 -->
+    <title>智能分商點貨系統 - 文字穩定版</title>
+    <!-- 核心庫加載 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- 使用 vanilla lucide 核心庫（最穩定，不依賴 forwardRef） -->
-    <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
@@ -24,6 +21,7 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
+        /* 拖曳視覺回饋 */
         .drag-ghost {
             opacity: 0.2;
             transform: scale(0.95);
@@ -31,16 +29,25 @@
             background-color: #eef2ff !important;
         }
 
-        .active-scale:active { transform: scale(0.97); }
+        .active-scale:active { transform: scale(0.95); }
 
         .fade-in { animation: fadeIn 0.3s ease-out forwards; }
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
+            from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
         
         .drag-handle { cursor: grab; }
         .drag-handle:active { cursor: grabbing; }
+
+        /* 按鈕觸控區域優化 */
+        .btn-touch {
+            min-width: 44px;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
 </head>
 <body>
@@ -48,38 +55,39 @@
 
     <script type="text/babel">
         /**
-         * 修正圖標遺失的核心組件
-         * 直接從 window.lucide.icons 取得 SVG 結構進行渲染，避開 UMD 相容性問題
+         * 符號圖標組件 (Symbol Icon Component)
+         * 根據用戶要求，將所有圖標改為文字與符號，確保 100% 穩定顯示
          */
-        const Icon = ({ name, className = "w-5 h-5", stroke = "currentColor" }) => {
-            // 轉換 PascalCase 為 kebab-case (例如: ChevronLeft -> chevron-left)
-            const iconName = name.replace(/([A-Z0-9])/g, "-$1").toLowerCase().replace(/^-/, "");
-            const iconData = window.lucide && window.lucide.icons ? window.lucide.icons[iconName] : null;
-            
-            if (!iconData) {
-                return <div className={`${className} bg-slate-200 rounded-full flex items-center justify-center text-[8px]`}>?</div>;
-            }
-
-            // iconData 結構為 ["svg", {attrs}, [[tag, {attrs}], ...]]
-            return (
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke={stroke}
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={className}
-                >
-                    {iconData[2].map((child, idx) => {
-                        const TagName = child[0];
-                        return <TagName key={idx} {...child[1]} />;
-                    })}
-                </svg>
-            );
+        const Icon = ({ name, className = "" }) => {
+            const symbols = {
+                "ChevronLeft": "<",
+                "ChevronRight": ">",
+                "Plus": "+",
+                "Minus": "-",
+                "Settings": "＊",
+                "Trash2": "x",
+                "X": "x",
+                "Search": "找",
+                "Share2": "分享",
+                "ClipboardCheck": "V",
+                "Package": "貨",
+                "ArrowRight": "→",
+                "GripVertical": "::",
+                "CheckCircle2": "OK",
+                "Layers": "區",
+                "Filter": "選",
+                "Building2": "店",
+                "LayoutGrid": "分",
+                // 區站特定圖標
+                "Carrot": "菜",
+                "Fish": "魚",
+                "Soup": "湯",
+                "UtensilsCrossed": "熱",
+                "IceCream": "冷",
+                "Coffee": "飲",
+                "Timer": "輕"
+            };
+            return <span className={`font-black select-none ${className}`}>{symbols[name] || "?"}</span>;
         };
 
         const INITIAL_ZONES = [
@@ -105,58 +113,37 @@
                 "鼎津", "典佑", "合將", "象牙", "天誠", "康寶", "怪獸披薩", "興聯發", "菜商"
             ]);
 
-            // 整合所有 CSV 的食材資料
+            // 匯入所有表格資料
             const [ingredients, setIngredients] = React.useState([
-                // 湯區
-                { id: 3001, name: "豆漿", vendor: "美食家", unit: "籃", zone: "湯區" },
-                { id: 3002, name: "乳瑪琳", vendor: "美食家", unit: "罐", zone: "湯區" },
-                { id: 3003, name: "香豬油", vendor: "美食家", unit: "桶", zone: "湯區" },
-                { id: 3004, name: "雞骨", vendor: "天誠", unit: "件", zone: "湯區" },
-                { id: 3005, name: "豬大骨", vendor: "天誠", unit: "件", zone: "湯區" },
-                { id: 3006, name: "米酒", vendor: "津鼎", unit: "罐", zone: "湯區" },
-                { id: 3007, name: "藥膳湯粉", vendor: "象牙", unit: "包", zone: "湯區" },
-                { id: 3008, name: "蔥", vendor: "菜商", unit: "斤", zone: "湯區" },
-                // 熟食
-                { id: 4001, name: "粽葉", vendor: "美食家", unit: "包", zone: "熟食" },
-                { id: 4002, name: "酥皮", vendor: "美食家", unit: "箱", zone: "熟食" },
-                { id: 4003, name: "雞粉", vendor: "康寶", unit: "包", zone: "熟食" },
-                { id: 4004, name: "肉丸", vendor: "怪獸披薩", unit: "箱", zone: "熟食" },
-                { id: 4005, name: "蒜碎", vendor: "菜商", unit: "斤", zone: "熟食" },
-                { id: 4006, name: "櫛瓜", vendor: "菜商", unit: "條", zone: "熟食" },
-                // 輕食區
-                { id: 7001, name: "奶酒", vendor: "津鼎", unit: "罐", zone: "輕食區" },
-                { id: 7002, name: "煉乳", vendor: "津鼎", unit: "袋", zone: "輕食區" },
-                { id: 7003, name: "卡士達粉", vendor: "德麥", unit: "包", zone: "輕食區" },
-                { id: 7004, name: "楓糖", vendor: "德麥", unit: "罐", zone: "輕食區" },
-                { id: 7005, name: "蜂蜜蛋糕", vendor: "福市", unit: "箱", zone: "輕食區" },
-                { id: 7006, name: "堅果塔", vendor: "國賓點心坊", unit: "盒", zone: "輕食區" },
-                // 飲調
-                { id: 5001, name: "柳橙汁", vendor: "米可可", unit: "瓶", zone: "飲調" },
-                { id: 5002, name: "阿華田", vendor: "米可可", unit: "包", zone: "飲調" },
-                { id: 5003, name: "牛奶", vendor: "開元", unit: "籃", zone: "飲調" },
-                { id: 5004, name: "純糖粉", vendor: "美食家", unit: "包", zone: "飲調" },
-                { id: 5005, name: "氣泡水", vendor: "美食家", unit: "箱", zone: "飲調" },
-                // 冷台
-                { id: 6001, name: "烤鰻醬", vendor: "鼎津", unit: "罐", zone: "冷台" },
-                { id: 6002, name: "壽司米", vendor: "美食家", unit: "包", zone: "冷台" },
-                { id: 6003, name: "龍蝦沙拉", vendor: "美食家", unit: "包", zone: "冷台" },
-                { id: 6004, name: "瓦斯罐", vendor: "鼎津", unit: "組", zone: "冷台" },
-                { id: 6005, name: "手套", vendor: "開元", unit: "箱", zone: "冷台" },
+                // 菜區
+                { id: 1001, name: "高麗菜", vendor: "鑫羿", unit: "件", zone: "菜區" },
+                { id: 1002, name: "大陸妹", vendor: "鑫羿", unit: "斤", zone: "菜區" },
+                { id: 1003, name: "大白菜", vendor: "鑫羿", unit: "顆", zone: "菜區" },
+                { id: 1004, name: "黑木耳", vendor: "大台北", unit: "盒", zone: "菜區" },
+                { id: 1005, name: "金針菇", vendor: "大台北", unit: "包", zone: "菜區" },
+                { id: 1006, name: "秀珍菇", vendor: "大台北", unit: "包", zone: "菜區" },
                 // 海鮮
                 { id: 2001, name: "鱸魚", vendor: "元家", unit: "箱", zone: "海鮮" },
                 { id: 2002, name: "巴沙魚", vendor: "元家", unit: "箱", zone: "海鮮" },
                 { id: 2003, name: "雞心", vendor: "崎彩", unit: "包", zone: "海鮮" },
-                { id: 2004, name: "熟凍海螺", vendor: "崎彩", unit: "箱", zone: "海鮮" },
-                { id: 2005, name: "鳥蛋", vendor: "紘吉", unit: "斤", zone: "海鮮" },
-                { id: 2006, name: "蛤蠣", vendor: "大台北", unit: "斤", zone: "海鮮" },
-                { id: 2007, name: "凍蝦", vendor: "愛吃鬼", unit: "箱", zone: "海鮮" },
-                // 菜區
-                { id: 1001, name: "高麗菜", vendor: "鑫羿", unit: "件", zone: "菜區" },
-                { id: 1002, name: "大陸妹", vendor: "鑫羿", unit: "斤", zone: "菜區" },
-                { id: 1003, name: "黑木耳", vendor: "大台北", unit: "盒", zone: "菜區" },
-                { id: 1004, name: "檸檬", vendor: "良鮮水果", unit: "顆", zone: "菜區" },
-                { id: 1005, name: "蛋餃", vendor: "中華", unit: "盒", zone: "菜區" },
-                { id: 1006, name: "牛筋", vendor: "裕明", unit: "箱", zone: "菜區" },
+                { id: 2004, name: "鳥蛋", vendor: "紘吉", unit: "斤", zone: "海鮮" },
+                // 湯區
+                { id: 3001, name: "豆漿", vendor: "美食家", unit: "籃", zone: "湯區" },
+                { id: 3002, name: "雞骨", vendor: "天誠", unit: "件", zone: "湯區" },
+                { id: 3003, name: "米酒", vendor: "津鼎", unit: "罐", zone: "湯區" },
+                // 熟食
+                { id: 4001, name: "粽葉", vendor: "美食家", unit: "包", zone: "熟食" },
+                { id: 4002, name: "酥皮", vendor: "美食家", unit: "箱", zone: "熟食" },
+                { id: 4003, name: "肉丸", vendor: "怪獸披薩", unit: "箱", zone: "熟食" },
+                // 飲調
+                { id: 5001, name: "柳橙汁", vendor: "米可可", unit: "瓶", zone: "飲調" },
+                { id: 5002, name: "純糖粉", vendor: "美食家", unit: "包", zone: "飲調" },
+                // 冷台
+                { id: 6001, name: "烤鰻醬", vendor: "鼎津", unit: "罐", zone: "冷台" },
+                { id: 6002, name: "壽司米", vendor: "美食家", unit: "包", zone: "冷台" },
+                // 輕食
+                { id: 7001, name: "奶酒", vendor: "津鼎", unit: "罐", zone: "輕食區" },
+                { id: 7002, name: "卡士達粉", vendor: "德麥", unit: "包", zone: "輕食區" },
             ]);
 
             const [selectedBranch, setSelectedBranch] = React.useState(branches[0] || "");
@@ -179,8 +166,12 @@
             const [newBranchName, setNewBranchName] = React.useState('');
             const [newZoneName, setNewZoneName] = React.useState('');
 
+            // 拖曳排序邏輯
             const handleDragStart = (id) => setDraggedId(id);
-            const handleDragOver = (e, id) => { e.preventDefault(); if (id !== draggedId) setOverId(id); };
+            const handleDragOver = (e, id) => {
+                e.preventDefault();
+                if (id !== draggedId) setOverId(id);
+            };
             const handleDragEnd = () => {
                 if (draggedId !== null && overId !== null) {
                     const newIngredients = [...ingredients];
@@ -236,13 +227,13 @@
 
             const Nav = ({ title, onBack, rightAction }) => (
                 <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-4 flex items-center justify-between shadow-sm">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                         {onBack && (
-                            <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg active-scale">
-                                <Icon name="ChevronLeft" className="text-slate-500" />
+                            <button onClick={onBack} className="w-10 h-10 bg-slate-100 rounded-xl active-scale btn-touch">
+                                <Icon name="ChevronLeft" className="text-slate-700 text-xl" />
                             </button>
                         )}
-                        <h1 className="text-xl font-black text-slate-800 tracking-tight">{title}</h1>
+                        <h1 className="text-lg font-black text-slate-800 tracking-tight">{title}</h1>
                     </div>
                     {rightAction}
                 </div>
@@ -250,15 +241,18 @@
 
             return (
                 <div className="min-h-screen text-slate-900 pb-24 selection:bg-indigo-100 overflow-x-hidden fade-in">
+                    
+                    {/* 1. 設定頁面 */}
                     {view === 'setup' && (
                         <div className="max-w-md mx-auto px-6 pt-16">
                             <div className="flex justify-center mb-10">
-                                <div className="bg-indigo-600 w-20 h-20 rounded-[2.5rem] shadow-2xl shadow-indigo-200 flex items-center justify-center rotate-3">
-                                    <Icon name="Package" className="text-white w-10 h-10" />
+                                <div className="bg-indigo-600 w-20 h-20 rounded-[2.5rem] shadow-2xl shadow-indigo-200 flex items-center justify-center rotate-3 font-black text-white text-3xl">
+                                    <Icon name="Package" className="text-4xl" />
                                 </div>
                             </div>
                             <h2 className="text-3xl font-black text-center text-slate-800 mb-2">智能分商點貨</h2>
-                            <p className="text-center text-slate-400 text-sm mb-12 font-medium">資料已整合 • 拖曳順序 • 分商下單</p>
+                            <p className="text-center text-slate-400 text-sm mb-12 font-medium">拖曳排序 • 分商下單 • 符號版</p>
+
                             <div className="space-y-6 bg-white p-8 rounded-[3rem] shadow-xl border border-white">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">選擇分店</label>
@@ -271,15 +265,16 @@
                                     <input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} className="w-full bg-slate-50 border-none rounded-2xl py-4.5 px-5 text-lg font-bold ring-1 ring-slate-100 outline-none" />
                                 </div>
                                 <button onClick={() => setView('zone_select')} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-lg shadow-xl flex items-center justify-center gap-3 active-scale transition-all">
-                                    開始點貨 <Icon name="ArrowRight" className="text-white" />
+                                    開始點貨 <Icon name="ArrowRight" className="text-xl" />
                                 </button>
-                                <button onClick={() => { setView('admin'); setAdminTab('ingredients'); }} className="w-full py-3 text-slate-400 font-bold text-xs flex items-center justify-center gap-2 hover:text-indigo-600 transition-colors text-center">
-                                    <Icon name="Settings" className="w-4 h-4" /> 系統設定與食材管理
+                                <button onClick={() => { setView('admin'); setAdminTab('ingredients'); }} className="w-full py-3 text-slate-400 font-bold text-xs flex items-center justify-center gap-2 hover:text-indigo-600 transition-colors">
+                                    <Icon name="Settings" /> 系統設定與管理
                                 </button>
                             </div>
                         </div>
                     )}
 
+                    {/* 2. 區站選擇 */}
                     {view === 'zone_select' && (
                         <div className="max-w-md mx-auto">
                             <Nav title="選擇區站" onBack={() => setView('setup')} />
@@ -290,34 +285,35 @@
                                     return (
                                         <button key={zone.name} onClick={() => { setSelectedZone(zone.name); setView('inventory'); }} className={`p-5 rounded-[2.5rem] border transition-all active-scale flex items-center justify-between bg-white shadow-sm hover:border-indigo-200 ${activeCount > 0 ? 'border-indigo-200 ring-4 ring-indigo-50' : 'border-slate-100'}`}>
                                             <div className="flex items-center gap-4">
-                                                <div className={`${zone.color} p-4 rounded-3xl shadow-lg`}>
-                                                    <Icon name={zone.icon} className="text-white w-6 h-6" />
+                                                <div className={`${zone.color} w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center font-black text-white text-2xl`}>
+                                                    <Icon name={zone.icon} />
                                                 </div>
                                                 <div className="text-left">
                                                     <h3 className="font-black text-lg text-slate-800">{zone.name}</h3>
                                                     <p className="text-xs font-bold text-slate-400">{activeCount > 0 ? `已點: ${activeCount} 項` : `清單共 ${zoneItems.length} 項`}</p>
                                                 </div>
                                             </div>
-                                            <Icon name="ChevronRight" className="text-slate-300" />
+                                            <Icon name="ChevronRight" className="text-slate-300 text-xl" />
                                         </button>
                                     );
                                 })}
                             </div>
-                            <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#F1F5F9] to-transparent pointer-events-none">
+                            <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#F1F5F9] to-transparent pointer-events-none text-center">
                                 <button onClick={() => setView('result')} className="max-w-md mx-auto w-full bg-green-600 text-white py-5 rounded-2xl font-black shadow-2xl flex items-center justify-center gap-2 active-scale pointer-events-auto">
-                                    <Icon name="ClipboardCheck" className="text-white" /> 生成廠商單 ({Object.keys(groupedOrders).length})
+                                    <Icon name="ClipboardCheck" /> 生成廠商訂單 ({Object.keys(groupedOrders).length})
                                 </button>
                             </div>
                         </div>
                     )}
 
+                    {/* 3. 食材點貨頁面 (加減號修復) */}
                     {view === 'inventory' && (
                         <div className="max-w-md mx-auto">
                             <Nav title={selectedZone} onBack={() => { setView('zone_select'); setSearchQuery(''); }} />
                             <div className="bg-white/80 backdrop-blur-md sticky top-[61px] z-40 px-4 py-4 border-b border-slate-100 shadow-sm">
                                 <div className="relative">
-                                    <Icon name="Search" className="absolute left-4 top-4 text-slate-300" />
-                                    <input type="text" placeholder={`搜尋${selectedZone}項目...`} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-11 pr-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none" />
+                                    <div className="absolute left-4 top-4 font-black text-slate-300"><Icon name="Search" /></div>
+                                    <input type="text" placeholder={`搜尋${selectedZone}...`} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none" />
                                 </div>
                             </div>
                             <div className="p-4 space-y-4">
@@ -326,25 +322,32 @@
                                     const isDragging = draggedId === item.id;
                                     const isOver = overId === item.id;
                                     return (
-                                        <div key={item.id} draggable onDragStart={() => handleDragStart(item.id)} onDragOver={(e) => handleDragOver(e, item.id)} onDragEnd={handleDragEnd} className={`bg-white p-5 rounded-[2rem] border shadow-sm flex items-center justify-between transition-all duration-300 ${isDragging ? 'drag-ghost' : 'border-slate-100'} ${isOver ? 'border-indigo-400 translate-y-1' : ''}`}>
+                                        <div key={item.id} draggable onDragStart={() => handleDragStart(item.id)} onDragOver={(e) => handleDragOver(e, item.id)} onDragEnd={handleDragEnd} className={`bg-white p-5 rounded-[2rem] border shadow-sm flex items-center justify-between transition-all duration-300 ${isDragging ? 'drag-ghost' : 'border-slate-100'} ${isOver ? 'border-indigo-400 translate-y-1 shadow-md' : ''}`}>
                                             <div className="flex items-center gap-4 flex-1 min-w-0">
-                                                <div className="p-1.5 text-slate-300 drag-handle active-scale">
+                                                <div className="p-1.5 text-slate-300 drag-handle font-black text-xl">
                                                     <Icon name="GripVertical" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <h4 className="font-black text-slate-800 text-lg truncate">{item.name}</h4>
+                                                    <h4 className="font-black text-slate-800 text-lg truncate leading-tight">{item.name}</h4>
                                                     <p className="text-[10px] font-black text-indigo-500 uppercase mt-0.5">{item.vendor}</p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-3 bg-slate-100/50 p-1.5 rounded-3xl shrink-0 ml-4">
-                                                <button onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: Math.max(0, cur - 1) }); }} className="w-10 h-10 bg-white rounded-2xl shadow-sm flex items-center justify-center active-scale text-slate-400 border border-slate-100">
+
+                                            <div className="flex items-center gap-2 bg-slate-100/50 p-1.5 rounded-3xl shrink-0 ml-4">
+                                                <button 
+                                                    onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: Math.max(0, cur - 1) }); }} 
+                                                    className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center active-scale btn-touch text-slate-400 font-black text-2xl"
+                                                >
                                                     <Icon name="Minus" />
                                                 </button>
                                                 <div className="w-10 text-center">
                                                     <span className={`text-xl font-black ${qty === 0 ? 'text-slate-300' : 'text-indigo-600'}`}>{qty}</span>
                                                     <p className="text-[9px] text-slate-400 font-black">{item.unit}</p>
                                                 </div>
-                                                <button onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: cur + 1 }); }} className="w-10 h-10 bg-indigo-600 rounded-2xl shadow-lg flex items-center justify-center text-white active-scale">
+                                                <button 
+                                                    onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: cur + 1 }); }} 
+                                                    className="w-12 h-12 bg-indigo-600 rounded-2xl shadow-lg flex items-center justify-center text-white active-scale btn-touch font-black text-2xl"
+                                                >
                                                     <Icon name="Plus" />
                                                 </button>
                                             </div>
@@ -357,27 +360,27 @@
 
                     {view === 'result' && (
                         <div className="max-w-md mx-auto px-6">
-                            <Nav title="最終下單清單" onBack={() => setView('zone_select')} />
+                            <Nav title="確認訂單" onBack={() => setView('zone_select')} />
                             <div className="space-y-8 pb-32 mt-6">
                                 {Object.keys(groupedOrders).length === 0 ? (
-                                    <div className="text-center py-20 bg-white rounded-[3rem] border border-dashed border-slate-200">
-                                        <Icon name="Package" className="text-slate-200 mx-auto mb-4 w-12 h-12" />
-                                        <p className="text-slate-400 font-black">尚未選擇任何項目</p>
+                                    <div className="text-center py-24 bg-white rounded-[3rem] border border-dashed border-slate-200">
+                                        <div className="font-black text-slate-200 text-5xl mb-4">?</div>
+                                        <p className="text-slate-400 font-black">尚未叫貨</p>
                                     </div>
                                 ) : (
                                     Object.entries(groupedOrders).map(([vendor, items]) => (
-                                        <div key={vendor} className="bg-white rounded-[2.5rem] shadow-xl border border-white overflow-hidden animate-in zoom-in-95">
+                                        <div key={vendor} className="bg-white rounded-[2.5rem] shadow-xl border border-white overflow-hidden animate-in zoom-in-95 duration-300">
                                             <div className="p-6 bg-slate-900 flex items-center justify-between">
                                                 <h3 className="text-white font-black text-xl">{vendor}</h3>
-                                                <div className="bg-white/10 px-4 py-1.5 rounded-full text-[10px] text-white font-black uppercase tracking-widest">{items.length} 項</div>
+                                                <div className="bg-white/10 px-4 py-1.5 rounded-full text-[10px] text-white font-black tracking-widest uppercase">{items.length} 項</div>
                                             </div>
                                             <div className="p-6 space-y-5">
                                                 <div className="bg-slate-50 rounded-3xl p-5 font-mono text-sm text-slate-600 leading-relaxed whitespace-pre-wrap select-all border border-slate-100">
                                                     {getVendorText(vendor, items)}
                                                 </div>
-                                                <button onClick={() => handleShare(vendor, items)} className={`w-full py-5 rounded-2xl font-black flex items-center justify-center gap-3 shadow-lg active-scale transition-all ${copyStatus[vendor] ? 'bg-green-500 text-white' : 'bg-indigo-600 text-white shadow-indigo-100'}`}>
-                                                    {copyStatus[vendor] ? <Icon name="CheckCircle2" /> : <Icon name="Share2" />}
-                                                    {copyStatus[vendor] ? '已複製內容！' : `發送訂單給 ${vendor}`}
+                                                <button onClick={() => handleShare(vendor, items)} className={`w-full py-5 rounded-2xl font-black flex items-center justify-center gap-3 shadow-lg active-scale transition-all ${copyStatus[vendor] ? 'bg-green-500 text-white' : 'bg-blue-600 text-white shadow-blue-100'}`}>
+                                                    <Icon name={copyStatus[vendor] ? "CheckCircle2" : "Share2"} />
+                                                    {copyStatus[vendor] ? '內容已複製！' : `發送訂單給 ${vendor}`}
                                                 </button>
                                             </div>
                                         </div>
@@ -387,22 +390,28 @@
                         </div>
                     )}
 
+                    {/* 5. 後台管理 (垃圾桶 x 修正) */}
                     {view === 'admin' && (
                         <div className="max-w-md mx-auto">
                             <Nav title="系統管理" onBack={() => setView('setup')} />
                             <div className="flex bg-white border-b border-slate-100 px-4 py-3 gap-2 overflow-x-auto no-scrollbar shadow-sm sticky top-[61px] z-50">
-                                {[{ id: 'ingredients', label: '食材庫', icon: 'Layers' }, { id: 'vendors', label: '廠商', icon: 'Filter' }, { id: 'branches', label: '分店', icon: 'Building2' }].map(tab => (
+                                {[
+                                    { id: 'ingredients', label: '食材', icon: 'Layers' }, 
+                                    { id: 'vendors', label: '廠商', icon: 'Filter' }, 
+                                    { id: 'branches', label: '分店', icon: 'Building2' }
+                                ].map(tab => (
                                     <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`px-5 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap ${adminTab === tab.id ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100'}`}>
-                                        <Icon name={tab.icon} className="w-4 h-4" /> {tab.label}
+                                        <Icon name={tab.icon} /> {tab.label}
                                     </button>
                                 ))}
                             </div>
+
                             <div className="p-6 space-y-6 pb-20">
                                 {adminTab === 'ingredients' && (
                                     <div className="space-y-6">
                                         <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
                                             <h3 className="font-black text-slate-800 flex items-center gap-2"><Icon name="Plus" className="text-indigo-600" /> 新增食材</h3>
-                                            <input placeholder="食材名稱" className="w-full bg-slate-50 rounded-xl p-4 font-bold outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                                            <input placeholder="食材名稱" className="w-full bg-slate-50 rounded-xl p-4 font-bold outline-none ring-1 ring-slate-100" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
                                             <div className="grid grid-cols-2 gap-3">
                                                 <select className="bg-slate-50 rounded-xl p-4 font-bold outline-none" value={newItem.vendor} onChange={e => setNewItem({...newItem, vendor: e.target.value})}>
                                                     {vendors.map(v => <option key={v} value={v}>{v}</option>)}
@@ -416,10 +425,12 @@
                                             </select>
                                             <button onClick={() => { if(newItem.name) { setIngredients([...ingredients, { ...newItem, id: Date.now() }]); setNewItem({ ...newItem, name: '' }); } }} className="w-full bg-indigo-600 text-white p-5 rounded-2xl font-black shadow-lg">確認新增食材</button>
                                         </div>
+
                                         <div className="bg-slate-200/50 p-4 rounded-3xl grid grid-cols-2 gap-2">
-                                            <select className="bg-white rounded-xl p-2 text-xs font-bold border-none" value={adminZoneFilter} onChange={e => setAdminZoneFilter(e.target.value)}><option value="全部">全部區站</option>{zones.map(z => <option key={z.name} value={z.name}>{z.name}</option>)}</select>
-                                            <select className="bg-white rounded-xl p-2 text-xs font-bold border-none" value={adminVendorFilter} onChange={e => setAdminVendorFilter(e.target.value)}><option value="全部">全部廠商</option>{vendors.map(v => <option key={v} value={v}>{v}</option>)}</select>
+                                            <select className="bg-white rounded-xl p-2 text-xs font-bold border-none shadow-sm" value={adminZoneFilter} onChange={e => setAdminZoneFilter(e.target.value)}><option value="全部">全部區站</option>{zones.map(z => <option key={z.name} value={z.name}>{z.name}</option>)}</select>
+                                            <select className="bg-white rounded-xl p-2 text-xs font-bold border-none shadow-sm" value={adminVendorFilter} onChange={e => setAdminVendorFilter(e.target.value)}><option value="全部">全部廠商</option>{vendors.map(v => <option key={v} value={v}>{v}</option>)}</select>
                                         </div>
+
                                         <div className="space-y-2">
                                             {ingredients.filter(i => (adminZoneFilter === '全部' || i.zone === adminZoneFilter) && (adminVendorFilter === '全部' || i.vendor === adminVendorFilter)).slice().reverse().map(item => (
                                                 <div key={item.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center shadow-sm border border-slate-50">
@@ -427,7 +438,7 @@
                                                         <p className="font-black text-slate-700 truncate">{item.name}</p>
                                                         <p className="text-[10px] font-bold text-slate-400 uppercase">{item.vendor} • {item.zone} • {item.unit}</p>
                                                     </div>
-                                                    <button onClick={() => setIngredients(ingredients.filter(i => i.id !== item.id))} className="bg-rose-50 text-rose-400 p-2.5 rounded-xl"><Icon name="Trash2" className="w-5 h-5" /></button>
+                                                    <button onClick={() => setIngredients(ingredients.filter(i => i.id !== item.id))} className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl font-black text-xl"><Icon name="Trash2" /></button>
                                                 </div>
                                             ))}
                                         </div>
@@ -436,16 +447,48 @@
                                 {adminTab === 'vendors' && (
                                     <div className="space-y-6">
                                         <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex gap-3">
-                                            <input placeholder="新廠商名稱" className="flex-1 bg-slate-50 rounded-2xl p-4.5 font-bold outline-none ring-1 ring-slate-100 border-none" value={newVendorName} onChange={e => setNewVendorName(e.target.value)} />
+                                            <input placeholder="新廠商名稱" className="flex-1 bg-slate-50 rounded-2xl p-4.5 font-bold outline-none ring-1 ring-slate-100" value={newVendorName} onChange={e => setNewVendorName(e.target.value)} />
                                             <button onClick={() => { if(newVendorName) {setVendors([...vendors, newVendorName]); setNewVendorName('');} }} className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增</button>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-3">{vendors.map(v => (<div key={v} className="bg-white p-5 rounded-[1.5rem] flex justify-between items-center shadow-sm border border-slate-50"><span className="font-bold text-sm truncate">{v}</span><button onClick={() => setVendors(vendors.filter(i => i !== v))} className="text-slate-300 hover:text-rose-500"><Icon name="X" /></button></div>))}</div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {vendors.map(v => (
+                                                <div key={v} className="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-50">
+                                                    <span className="font-bold text-sm truncate">{v}</span>
+                                                    <button onClick={() => setVendors(vendors.filter(i => i !== v))} className="text-slate-300 font-black text-xl px-2"><Icon name="X" /></button>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                                 {adminTab === 'branches' && (
                                     <div className="space-y-8">
-                                        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex gap-3"><input placeholder="新分店" className="flex-1 bg-slate-50 rounded-2xl p-4.5 font-bold outline-none" value={newBranchName} onChange={e => setNewBranchName(e.target.value)} /><button onClick={() => { if(newBranchName) {setBranches([...branches, newBranchName]); setNewBranchName('');} }} className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增</button></div>
-                                        <div className="space-y-2">{branches.map(b => (<div key={b} className="bg-white p-5 rounded-[1.5rem] flex justify-between items-center shadow-sm border border-slate-50 font-bold"><span>{b}</span><button onClick={() => setBranches(branches.filter(i => i !== b))} className="text-slate-300 hover:text-rose-500"><Icon name="Trash2" /></button></div>))}</div>
+                                        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex gap-3">
+                                            <input placeholder="新分店名稱" className="flex-1 bg-slate-50 rounded-2xl p-4.5 font-bold outline-none" value={newBranchName} onChange={e => setNewBranchName(e.target.value)} />
+                                            <button onClick={() => { if(newBranchName) {setBranches([...branches, newBranchName]); setNewBranchName('');} }} className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增</button>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {branches.map(b => (
+                                                <div key={b} className="bg-white p-5 rounded-[1.5rem] flex justify-between items-center shadow-sm border border-slate-50 font-bold">
+                                                    <span>{b}</span>
+                                                    <button onClick={() => setBranches(branches.filter(i => i !== b))} className="text-slate-300 font-black text-xl px-2"><Icon name="Trash2" /></button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+                                            <h3 className="font-black text-slate-800 flex items-center gap-2"><Icon name="LayoutGrid" className="text-indigo-600" /> 區站管理</h3>
+                                            <div className="flex gap-2">
+                                                <input placeholder="新區站" className="flex-1 bg-slate-50 rounded-xl p-4 font-bold outline-none ring-1 ring-slate-100" value={newZoneName} onChange={e => setNewZoneName(e.target.value)} />
+                                                <button onClick={() => { if(newZoneName) { setZones([...zones, { name: newZoneName, icon: 'Package', color: 'bg-slate-500' }]); setNewZoneName(''); } }} className="bg-slate-900 text-white px-6 rounded-xl font-black">新增</button>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {zones.map(z => (
+                                                    <div key={z.name} className="bg-slate-50 px-4 py-3 rounded-xl flex justify-between items-center text-xs font-bold text-slate-700">
+                                                        <span>{z.name}</span>
+                                                        <button onClick={() => setZones(zones.filter(i => i.name !== z.name))} className="text-slate-300 font-black px-2"><Icon name="X" /></button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
