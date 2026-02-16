@@ -1,0 +1,551 @@
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { 
+  ClipboardCheck, Settings, ChevronRight, Plus, Minus,
+  Trash2, Copy, CheckCircle2, Package, Store, Share2,
+  ChevronLeft, Filter, Layers, Search, ArrowRight,
+  Fish, Carrot, Coffee, Soup, UtensilsCrossed, IceCream,
+  Timer, Calendar, Info, Check, AlertCircle, Edit3, Save, X,
+  ExternalLink, Building2, LayoutGrid, GripVertical
+} from 'lucide-react';
+
+// 初始區站定義
+const INITIAL_ZONES = [
+  { name: "菜區", icon: 'Carrot', color: "bg-emerald-500" },
+  { name: "海鮮", icon: 'Fish', color: "bg-blue-500" },
+  { name: "湯區", icon: 'Soup', color: "bg-orange-500" },
+  { name: "熟食", icon: 'UtensilsCrossed', color: "bg-red-500" },
+  { name: "冷台", icon: 'IceCream', color: "bg-cyan-500" },
+  { name: "飲調", icon: 'Coffee', color: "bg-amber-600" },
+  { name: "輕食區", icon: 'Timer', color: "bg-pink-500" }
+];
+
+const ICON_MAP = {
+  Carrot: Carrot,
+  Fish: Fish,
+  Soup: Soup,
+  UtensilsCrossed: UtensilsCrossed,
+  IceCream: IceCream,
+  Coffee: Coffee,
+  Timer: Timer,
+  Package: Package
+};
+
+const DEFAULT_UNITS = ["件", "箱", "包", "斤", "顆", "條", "罐", "桶", "籃", "袋", "捲", "盒", "兩", "串", "瓶", "滿", "組"];
+
+export default function App() {
+  const [view, setView] = useState('setup'); 
+  const [adminTab, setAdminTab] = useState('ingredients');
+  const [zones, setZones] = useState(INITIAL_ZONES);
+  const [branches, setBranches] = useState(["台北南港店", "台北信義店", "台中精誠店"]);
+  const [vendors, setVendors] = useState([
+    "鑫羿", "大台北", "良鮮水果", "中華", "裕明", "元家", "崎彩", "紘吉", "愛吃鬼", 
+    "津鼎", "德麥", "福市", "國賓點心坊", "米可可", "美食家", "開元", "啤酒肚", 
+    "鼎津", "典佑", "合將", "象牙", "天誠", "康寶", "怪獸披薩", "興聯發", "菜商"
+  ]);
+
+  const [ingredients, setIngredients] = useState([
+    // --- 菜區 ---
+    { id: 1001, name: "高麗菜", vendor: "鑫羿", unit: "件", zone: "菜區" },
+    { id: 1002, name: "大陸妹", vendor: "鑫羿", unit: "斤", zone: "菜區" },
+    { id: 1003, name: "大白菜", vendor: "鑫羿", unit: "顆", zone: "菜區" },
+    { id: 1004, name: "黑木耳", vendor: "大台北", unit: "盒", zone: "菜區" },
+    { id: 1005, name: "金針菇", vendor: "大台北", unit: "包", zone: "菜區" },
+    // --- 海鮮 ---
+    { id: 2001, name: "鱸魚", vendor: "元家", unit: "箱", zone: "海鮮" },
+    { id: 2002, name: "巴沙魚", vendor: "元家", unit: "箱", zone: "海鮮" },
+    { id: 2003, name: "雞心", vendor: "崎彩", unit: "箱", zone: "海鮮" },
+    // --- 湯區 ---
+    { id: 3001, name: "豆漿", vendor: "美食家", unit: "籃", zone: "湯區" },
+    { id: 3002, name: "雞骨", vendor: "天誠", unit: "件", zone: "湯區" },
+    // --- 其他 ---
+    { id: 4001, name: "酥皮", vendor: "美食家", unit: "箱", zone: "熟食" },
+    { id: 5001, name: "柳橙汁", vendor: "米可可", unit: "箱", zone: "飲調" },
+  ]);
+
+  const [selectedBranch, setSelectedBranch] = useState(branches[0] || "");
+  const [orderDate, setOrderDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [selectedZone, setSelectedZone] = useState(null);
+  const [orderQuantities, setOrderQuantities] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [copyStatus, setCopyStatus] = useState({});
+
+  // 拖曳狀態
+  const [draggedId, setDraggedId] = useState(null);
+  const [targetId, setTargetId] = useState(null);
+
+  // 後台篩選與新增
+  const [adminZoneFilter, setAdminZoneFilter] = useState('全部');
+  const [adminVendorFilter, setAdminVendorFilter] = useState('全部');
+  const [newItem, setNewItem] = useState({ name: '', vendor: '', unit: '包', zone: '菜區' });
+  const [newVendorName, setNewVendorName] = useState('');
+  const [newBranchName, setNewBranchName] = useState('');
+  const [newZoneName, setNewZoneName] = useState('');
+
+  // --- 拖曳邏輯 ---
+  const handleDragStart = (id) => setDraggedId(id);
+  const handleDragEnter = (id) => {
+    if (id === draggedId) return;
+    setTargetId(id);
+  };
+  const handleDragEnd = () => {
+    if (draggedId !== null && targetId !== null) {
+      const newIngredients = [...ingredients];
+      const fromIndex = newIngredients.findIndex(i => i.id === draggedId);
+      const toIndex = newIngredients.findIndex(i => i.id === targetId);
+      const [movedItem] = newIngredients.splice(fromIndex, 1);
+      newIngredients.splice(toIndex, 0, movedItem);
+      setIngredients(newIngredients);
+    }
+    setDraggedId(null);
+    setTargetId(null);
+  };
+
+  // --- 計算邏輯 ---
+  const groupedOrders = useMemo(() => {
+    const list = ingredients
+      .map(item => ({ ...item, orderQty: parseFloat(orderQuantities[item.id] || 0) }))
+      .filter(i => i.orderQty > 0);
+
+    return list.reduce((acc, item) => {
+      if (!acc[item.vendor]) acc[item.vendor] = [];
+      acc[item.vendor].push(item);
+      return acc;
+    }, {});
+  }, [ingredients, orderQuantities]);
+
+  const getVendorText = (vendorName, items) => {
+    const [y, m, d] = orderDate.split('-');
+    const dateStr = `${parseInt(m)}/${parseInt(d)}`;
+    let text = `${selectedBranch} ${dateStr}\n`;
+    items.forEach(item => {
+      text += `${item.name}${item.orderQty}${item.unit}\n`;
+    });
+    return text.trim();
+  };
+
+  const handleShare = async (vendorName, items) => {
+    const text = getVendorText(vendorName, items);
+    const el = document.createElement('textarea');
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+
+    setCopyStatus({ ...copyStatus, [vendorName]: true });
+    setTimeout(() => setCopyStatus({ ...copyStatus, [vendorName]: false }), 3000);
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `訂貨單-${vendorName}`, text });
+        return;
+      } catch (err) {}
+    }
+    window.location.href = `https://line.me/R/msg/text/?${encodeURIComponent(text)}`;
+  };
+
+  const filteredAdminIngredients = useMemo(() => {
+    return ingredients.filter(i => {
+      const matchZone = adminZoneFilter === '全部' || i.zone === adminZoneFilter;
+      const matchVendor = adminVendorFilter === '全部' || i.vendor === adminVendorFilter;
+      return matchZone && matchVendor;
+    }).slice().reverse();
+  }, [ingredients, adminZoneFilter, adminVendorFilter]);
+
+  const zoneIngredients = useMemo(() => {
+    return ingredients.filter(i => i.zone === selectedZone && i.name.includes(searchQuery));
+  }, [ingredients, selectedZone, searchQuery]);
+
+  const Nav = ({ title, onBack, rightAction }) => (
+    <div className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-100 px-4 py-4 flex items-center justify-between shadow-sm">
+      <div className="flex items-center gap-2">
+        {onBack && (
+          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-full transition-all">
+            <ChevronLeft className="w-6 h-6 text-slate-600" />
+          </button>
+        )}
+        <h1 className="text-xl font-black text-slate-800 tracking-tight">{title}</h1>
+      </div>
+      {rightAction}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#F1F5F9] text-slate-900 pb-24 font-sans selection:bg-blue-100 overflow-x-hidden">
+      
+      {/* 1. 設定頁面 */}
+      {view === 'setup' && (
+        <div className="max-w-md mx-auto px-6 pt-16 animate-in fade-in slide-in-from-bottom-8 duration-700">
+          <div className="flex justify-center mb-10">
+            <div className="bg-blue-600 w-20 h-20 rounded-[2.5rem] shadow-2xl shadow-blue-200 flex items-center justify-center rotate-3">
+              <Package className="text-white w-10 h-10" />
+            </div>
+          </div>
+          <h2 className="text-3xl font-black text-center text-slate-800 mb-2 tracking-tight">智能點貨系統</h2>
+          <p className="text-center text-slate-400 text-sm mb-12 font-medium">優化拖曳順序 • 分商下單</p>
+
+          <div className="space-y-6 bg-white p-8 rounded-[3rem] shadow-xl border border-white">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">選擇分店</label>
+              <select 
+                value={selectedBranch}
+                onChange={e => setSelectedBranch(e.target.value)}
+                className="w-full bg-slate-50 border-none rounded-2xl py-4.5 px-5 text-lg font-bold ring-1 ring-slate-100 focus:ring-4 focus:ring-blue-500/10"
+              >
+                {branches.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">叫貨日期</label>
+              <input 
+                type="date"
+                value={orderDate}
+                onChange={e => setOrderDate(e.target.value)}
+                className="w-full bg-slate-50 border-none rounded-2xl py-4.5 px-5 text-lg font-bold ring-1 ring-slate-100"
+              />
+            </div>
+            <button 
+              onClick={() => setView('zone_select')}
+              className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-lg shadow-xl flex items-center justify-center gap-3 active:scale-[0.96] transition-all"
+            >
+              進入區站叫貨 <ArrowRight className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => { setView('admin'); setAdminTab('ingredients'); }}
+              className="w-full py-3 text-slate-400 font-bold text-sm flex items-center justify-center gap-2 hover:text-slate-600"
+            >
+              <Settings className="w-4 h-4" /> 系統管理後台
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 2. 區站選擇 */}
+      {view === 'zone_select' && (
+        <div className="max-w-md mx-auto animate-in fade-in duration-500">
+          <Nav title="選擇區站" onBack={() => setView('setup')} />
+          <div className="p-6 grid grid-cols-1 gap-4 pb-32">
+            {zones.map((zone) => {
+              const zoneItems = ingredients.filter(i => i.zone === zone.name);
+              const activeOrderCount = zoneItems.filter(i => (orderQuantities[i.id] || 0) > 0).length;
+              const IconComp = ICON_MAP[zone.icon] || Package;
+              
+              return (
+                <button 
+                  key={zone.name}
+                  onClick={() => { setSelectedZone(zone.name); setView('inventory'); }}
+                  className={`p-5 rounded-[2.5rem] border transition-all active:scale-[0.98] flex items-center justify-between bg-white shadow-sm hover:border-blue-200 ${
+                    activeOrderCount > 0 ? 'border-blue-200 ring-2 ring-blue-50' : 'border-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`${zone.color} p-4 rounded-3xl shadow-lg`}>
+                      <IconComp className="text-white w-6 h-6" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-black text-lg text-slate-800">{zone.name}</h3>
+                      <p className="text-xs font-bold text-slate-400">
+                        {activeOrderCount > 0 ? `已點: ${activeOrderCount} 項` : `清單共 ${zoneItems.length} 項`}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-300" />
+                </button>
+              );
+            })}
+          </div>
+          
+          <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#F1F5F9] to-transparent">
+             <button 
+                onClick={() => setView('result')}
+                className="max-w-md mx-auto w-full bg-green-600 text-white py-5 rounded-2xl font-black shadow-2xl flex items-center justify-center gap-2 active:scale-95"
+              >
+                <ClipboardCheck className="w-6 h-6" />
+                生成廠商單 ({Object.keys(groupedOrders).length} 廠商)
+              </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. 食材叫貨操作 (拖曳優化版) */}
+      {view === 'inventory' && (
+        <div className="max-w-md mx-auto animate-in slide-in-from-right-8 duration-500">
+          <Nav title={selectedZone} onBack={() => { setView('zone_select'); setSearchQuery(''); }} />
+          
+          <div className="bg-white/80 backdrop-blur-md sticky top-[68px] z-40 px-4 py-4 border-b border-slate-50">
+            <div className="relative">
+              <Search className="absolute left-4 top-4 w-4 h-4 text-slate-300" />
+              <input 
+                type="text" 
+                placeholder={`搜尋項目...`}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-11 pr-4 text-sm font-bold focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {zoneIngredients.map((item) => {
+              const qty = orderQuantities[item.id] || 0;
+              const isDragging = draggedId === item.id;
+              const isTarget = targetId === item.id;
+              
+              return (
+                <div 
+                  key={item.id}
+                  draggable
+                  onDragStart={() => handleDragStart(item.id)}
+                  onDragEnter={() => handleDragEnter(item.id)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDragEnd={handleDragEnd}
+                  className={`
+                    bg-white p-5 rounded-[2rem] border shadow-sm flex items-center justify-between transition-all duration-300
+                    ${isDragging ? 'opacity-30 scale-95 border-blue-400 bg-blue-50' : 'opacity-100'}
+                    ${isTarget ? 'border-blue-500 ring-2 ring-blue-500/20 translate-y-1 shadow-md' : 'border-slate-100'}
+                  `}
+                >
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <div className="cursor-grab active:cursor-grabbing p-1.5 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-500 transition-colors">
+                      <GripVertical className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-black text-slate-800 text-lg truncate">{item.name}</h4>
+                      <p className="text-[10px] font-black text-blue-500 uppercase mt-0.5">{item.vendor}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 bg-slate-100/50 p-1.5 rounded-3xl shrink-0 ml-4">
+                    <button 
+                      onClick={() => {
+                        const cur = parseFloat(orderQuantities[item.id] || 0);
+                        setOrderQuantities({ ...orderQuantities, [item.id]: Math.max(0, cur - 1) });
+                      }}
+                      className="w-10 h-10 bg-white rounded-2xl shadow-sm flex items-center justify-center active:bg-slate-200"
+                    >
+                      <Minus className="w-5 h-5 text-slate-400" />
+                    </button>
+                    <div className="w-10 text-center">
+                      <span className={`text-lg font-black ${qty === 0 ? 'text-slate-300' : 'text-blue-600'}`}>
+                        {qty}
+                      </span>
+                      <p className="text-[9px] text-slate-400 font-black">{item.unit}</p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const cur = parseFloat(orderQuantities[item.id] || 0);
+                        setOrderQuantities({ ...orderQuantities, [item.id]: cur + 1 });
+                      }}
+                      className="w-10 h-10 bg-blue-600 rounded-2xl shadow-lg flex items-center justify-center active:bg-blue-700 text-white"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 4. 分商結果頁 */}
+      {view === 'result' && (
+        <div className="max-w-md mx-auto animate-in fade-in duration-500">
+          <Nav title="最終叫貨清單" onBack={() => setView('zone_select')} />
+          <div className="p-6 space-y-8 pb-32">
+            
+            <div className="bg-blue-50 p-5 rounded-3xl border border-blue-100 flex items-center gap-4 shadow-sm">
+              <div className="bg-blue-500 p-2 rounded-full shadow-inner">
+                 <Info className="w-4 h-4 text-white" />
+              </div>
+              <p className="text-xs text-blue-700 font-bold leading-relaxed">
+                點擊「傳送」按鈕會<strong>自動複製</strong>內容並嘗試開啟 LINE。
+              </p>
+            </div>
+
+            {Object.keys(groupedOrders).length === 0 ? (
+              <div className="text-center py-20 bg-white rounded-[3rem] border border-dashed border-slate-200">
+                <Package className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                <p className="text-slate-400 font-black">尚未點選任何食材</p>
+              </div>
+            ) : (
+              Object.entries(groupedOrders).map(([vendor, items]) => (
+                <div key={vendor} className="bg-white rounded-[2.5rem] shadow-xl border border-white overflow-hidden animate-in zoom-in-95 duration-300">
+                  <div className="p-6 bg-slate-900 flex items-center justify-between">
+                    <h3 className="text-white font-black text-xl">{vendor}</h3>
+                    <div className="bg-white/10 px-4 py-1.5 rounded-full text-[10px] text-white font-black tracking-widest uppercase">
+                      {items.length} Items
+                    </div>
+                  </div>
+                  <div className="p-6 space-y-5">
+                    <div className="bg-slate-50 rounded-3xl p-5 font-mono text-sm text-slate-600 leading-relaxed whitespace-pre-wrap select-all border border-slate-100">
+                      {getVendorText(vendor, items)}
+                    </div>
+                    <button 
+                      onClick={() => handleShare(vendor, items)}
+                      className={`w-full py-5 rounded-2xl font-black flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all ${
+                        copyStatus[vendor] ? 'bg-green-500 text-white' : 'bg-blue-600 text-white shadow-blue-100'
+                      }`}
+                    >
+                      {copyStatus[vendor] ? (
+                        <>
+                          <CheckCircle2 className="w-6 h-6 animate-in zoom-in" />
+                          <span>複製成功！正在跳轉...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Share2 className="w-6 h-6" />
+                          <span>傳送給 {vendor}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 5. 後台管理 */}
+      {view === 'admin' && (
+        <div className="max-w-md mx-auto">
+          <Nav title="系統設定後台" onBack={() => setView('setup')} />
+          <div className="flex bg-white border-b border-slate-100 px-4 py-3 gap-2 overflow-x-auto no-scrollbar shadow-sm">
+            {[
+              { id: 'ingredients', label: '食材庫', icon: Layers },
+              { id: 'vendors', label: '廠商管理', icon: Filter },
+              { id: 'branches', label: '分店/區站', icon: Building2 },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setAdminTab(tab.id)}
+                className={`px-5 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap ${
+                  adminTab === tab.id ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'
+                }`}
+              >
+                <tab.icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-6 space-y-6 pb-20">
+            {adminTab === 'ingredients' && (
+              <div className="space-y-6">
+                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+                  <h3 className="font-black text-slate-800 flex items-center gap-2 mb-2"><Plus className="w-5 h-5 text-blue-600" /> 新增食材</h3>
+                  <input placeholder="食材名稱" className="w-full bg-slate-50 rounded-2xl p-4.5 font-bold border-none ring-1 ring-slate-100 outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <select className="bg-slate-50 rounded-2xl p-4.5 font-bold border-none ring-1 ring-slate-100 outline-none" value={newItem.vendor} onChange={e => setNewItem({...newItem, vendor: e.target.value})}>
+                      <option value="">廠商選擇</option>
+                      {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                    <select className="bg-slate-50 rounded-2xl p-4.5 font-bold border-none ring-1 ring-slate-100 outline-none" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})}>
+                      {DEFAULT_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <select className="w-full bg-slate-50 rounded-2xl p-4.5 font-bold border-none ring-1 ring-slate-100 outline-none" value={newItem.zone} onChange={e => setNewItem({...newItem, zone: e.target.value})}>
+                    {zones.map(z => <option key={z.name} value={z.name}>{z.name}</option>)}
+                  </select>
+                  <button onClick={() => { if(newItem.name && newItem.vendor) { setIngredients([...ingredients, { ...newItem, id: Date.now() }]); setNewItem({ ...newItem, name: '' }); } }} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black shadow-lg">確認新增食材</button>
+                </div>
+
+                <div className="bg-slate-200/50 p-5 rounded-[2.5rem] space-y-4">
+                   <div className="grid grid-cols-2 gap-3">
+                      <select className="bg-white rounded-2xl p-3 text-xs font-bold border-none shadow-sm" value={adminZoneFilter} onChange={e => setAdminZoneFilter(e.target.value)}>
+                        <option value="全部">全部區站</option>
+                        {zones.map(z => <option key={z.name} value={z.name}>{z.name}</option>)}
+                      </select>
+                      <select className="bg-white rounded-2xl p-3 text-xs font-bold border-none shadow-sm" value={adminVendorFilter} onChange={e => setAdminVendorFilter(e.target.value)}>
+                        <option value="全部">全部廠商</option>
+                        {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                   </div>
+                </div>
+
+                <div className="space-y-3">
+                  {filteredAdminIngredients.map(item => (
+                    <div key={item.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center shadow-sm border border-slate-50">
+                      <div>
+                        <p className="font-black text-slate-700">{item.name}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                          {item.vendor} • <span className="text-blue-500">{item.zone}</span> • {item.unit}
+                        </p>
+                      </div>
+                      <button onClick={() => setIngredients(ingredients.filter(i => i.id !== item.id))} className="bg-red-50 p-2.5 rounded-xl text-red-400 hover:bg-red-500 hover:text-white transition-all">
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {adminTab === 'vendors' && (
+              <div className="space-y-6">
+                 <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+                    <h3 className="font-black text-slate-800 flex items-center gap-2 mb-2"><Plus className="w-5 h-5 text-blue-600" /> 新增廠商</h3>
+                    <div className="flex gap-3">
+                       <input className="flex-1 bg-slate-50 rounded-2xl p-4.5 font-bold border-none ring-1 ring-slate-100 outline-none" placeholder="廠商名稱" value={newVendorName} onChange={e => setNewVendorName(e.target.value)} />
+                       <button className="bg-slate-900 text-white px-8 rounded-2xl font-black shadow-md active:scale-95" onClick={() => { if(newVendorName) {setVendors([...vendors, newVendorName]); setNewVendorName('');} }}>新增</button>
+                    </div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-3">
+                    {vendors.map(v => (
+                      <div key={v} className="bg-white px-5 py-4 rounded-[1.5rem] text-xs font-bold border border-slate-100 flex items-center justify-between shadow-sm">
+                        <span>{v}</span>
+                        <button onClick={() => setVendors(vendors.filter(i => i !== v))} className="text-slate-200 hover:text-red-500 transition-colors">
+                           <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                 </div>
+              </div>
+            )}
+
+            {adminTab === 'branches' && (
+              <div className="space-y-8 pb-10">
+                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+                  <h3 className="font-black text-slate-800 flex items-center gap-2 mb-2"><Building2 className="w-5 h-5 text-blue-600" /> 分店管理</h3>
+                  <div className="flex gap-3">
+                    <input placeholder="分店名稱" className="flex-1 bg-slate-50 border-none rounded-2xl p-4.5 font-bold ring-1 ring-slate-100 outline-none" value={newBranchName} onChange={e => setNewBranchName(e.target.value)} />
+                    <button onClick={() => { if(newBranchName) { setBranches([...branches, newBranchName]); setNewBranchName(''); } }} className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增</button>
+                  </div>
+                  <div className="space-y-3 mt-4">
+                    {branches.map(b => (
+                      <div key={b} className="bg-slate-50 p-4.5 rounded-2xl flex justify-between items-center text-sm font-bold text-slate-700 border border-slate-100">
+                        {b}
+                        <button onClick={() => setBranches(branches.filter(i => i !== b))} className="text-red-200 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+                  <h3 className="font-black text-slate-800 flex items-center gap-2 mb-2"><LayoutGrid className="w-5 h-5 text-blue-600" /> 區站 (分類) 管理</h3>
+                  <div className="flex gap-3">
+                    <input placeholder="區站名稱" className="flex-1 bg-slate-50 border-none rounded-2xl p-4.5 font-bold ring-1 ring-slate-100 outline-none" value={newZoneName} onChange={e => setNewZoneName(e.target.value)} />
+                    <button onClick={() => { if(newZoneName) { setZones([...zones, { name: newZoneName, icon: 'Package', color: 'bg-slate-500' }]); setNewZoneName(''); } }} className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mt-4">
+                    {zones.map(z => (
+                      <div key={z.name} className="bg-slate-50 px-4 py-3 rounded-2xl flex justify-between items-center text-xs font-bold text-slate-700 border border-slate-100">
+                        {z.name}
+                        <X className="w-4 h-4 text-slate-200 hover:text-red-500 cursor-pointer" onClick={() => setZones(zones.filter(i => i.name !== z.name))} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
