@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智能分商點貨系統 - 文字穩定版</title>
+    <title>智能分商點貨系統 - 數據分析版</title>
     <!-- 核心庫加載 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -21,7 +21,6 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* 拖曳視覺回饋 */
         .drag-ghost {
             opacity: 0.2;
             transform: scale(0.95);
@@ -40,13 +39,29 @@
         .drag-handle { cursor: grab; }
         .drag-handle:active { cursor: grabbing; }
 
-        /* 按鈕觸控區域優化 */
         .btn-touch {
             min-width: 44px;
             min-height: 44px;
             display: flex;
             align-items: center;
             justify-content: center;
+        }
+
+        .editable-order-text {
+            background-color: #1e293b;
+            color: #f8fafc;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            line-height: 1.625;
+            width: 100%;
+            border-radius: 1.5rem;
+            padding: 1.25rem;
+            resize: none;
+            outline: none;
+            border: 2px solid transparent;
+            transition: border-color 0.2s;
+        }
+        .editable-order-text:focus {
+            border-color: #6366f1;
         }
     </style>
 </head>
@@ -55,8 +70,7 @@
 
     <script type="text/babel">
         /**
-         * 符號圖標組件 (Symbol Icon Component)
-         * 根據用戶要求，將所有圖標改為文字與符號，確保 100% 穩定顯示
+         * 符號圖標組件
          */
         const Icon = ({ name, className = "" }) => {
             const symbols = {
@@ -78,7 +92,9 @@
                 "Filter": "選",
                 "Building2": "店",
                 "LayoutGrid": "分",
-                // 區站特定圖標
+                "Edit": "編",
+                "Chart": "圖",
+                "History": "歷",
                 "Carrot": "菜",
                 "Fish": "魚",
                 "Soup": "湯",
@@ -89,6 +105,13 @@
             };
             return <span className={`font-black select-none ${className}`}>{symbols[name] || "?"}</span>;
         };
+
+        const TEMPLATE_INGREDIENTS = [
+            { id: 1001, name: "高麗菜", vendor: "鑫羿", unit: "件", zone: "菜區" },
+            { id: 1002, name: "黑木耳", vendor: "大台北", unit: "盒", zone: "菜區" },
+            { id: 2001, name: "鱸魚", vendor: "元家", unit: "箱", zone: "海鮮" },
+            { id: 3001, name: "豆漿", vendor: "美食家", unit: "籃", zone: "湯區" }
+        ];
 
         const INITIAL_ZONES = [
             { name: "菜區", icon: 'Carrot', color: "bg-emerald-500" },
@@ -103,90 +126,121 @@
         const DEFAULT_UNITS = ["件", "箱", "包", "斤", "顆", "條", "罐", "桶", "籃", "袋", "捲", "盒", "兩", "串", "瓶", "滿", "組"];
 
         function App() {
+            const [storeDatabases, setStoreDatabases] = React.useState({
+                "台北南港店": { 
+                    ingredients: [...TEMPLATE_INGREDIENTS], 
+                    zones: [...INITIAL_ZONES], 
+                    vendors: ["鑫羿", "大台北", "元家", "美食家"],
+                    history: [] 
+                },
+                "台北信義店": { 
+                    ingredients: [...TEMPLATE_INGREDIENTS], 
+                    zones: [...INITIAL_ZONES], 
+                    vendors: ["鑫羿", "大台北", "元家", "美食家"],
+                    history: []
+                }
+            });
+
+            const [branches, setBranches] = React.useState(Object.keys(storeDatabases));
+            const [selectedBranch, setSelectedBranch] = React.useState(branches[0]);
+            
+            const currentDb = storeDatabases[selectedBranch] || { ingredients: [], zones: [], vendors: [], history: [] };
+
             const [view, setView] = React.useState('setup'); 
             const [adminTab, setAdminTab] = React.useState('ingredients');
-            const [zones, setZones] = React.useState(INITIAL_ZONES);
-            const [branches, setBranches] = React.useState(["台北南港店", "台北信義店", "台中精誠店"]);
-            const [vendors, setVendors] = React.useState([
-                "鑫羿", "大台北", "良鮮水果", "中華", "裕明", "元家", "崎彩", "紘吉", "愛吃鬼", 
-                "津鼎", "德麥", "福市", "國賓點心坊", "米可可", "美食家", "開元", "啤酒肚", 
-                "鼎津", "典佑", "合將", "象牙", "天誠", "康寶", "怪獸披薩", "興聯發", "菜商"
-            ]);
-
-            // 匯入所有表格資料
-            const [ingredients, setIngredients] = React.useState([
-                // 菜區
-                { id: 1001, name: "高麗菜", vendor: "鑫羿", unit: "件", zone: "菜區" },
-                { id: 1002, name: "大陸妹", vendor: "鑫羿", unit: "斤", zone: "菜區" },
-                { id: 1003, name: "大白菜", vendor: "鑫羿", unit: "顆", zone: "菜區" },
-                { id: 1004, name: "黑木耳", vendor: "大台北", unit: "盒", zone: "菜區" },
-                { id: 1005, name: "金針菇", vendor: "大台北", unit: "包", zone: "菜區" },
-                { id: 1006, name: "秀珍菇", vendor: "大台北", unit: "包", zone: "菜區" },
-                // 海鮮
-                { id: 2001, name: "鱸魚", vendor: "元家", unit: "箱", zone: "海鮮" },
-                { id: 2002, name: "巴沙魚", vendor: "元家", unit: "箱", zone: "海鮮" },
-                { id: 2003, name: "雞心", vendor: "崎彩", unit: "包", zone: "海鮮" },
-                { id: 2004, name: "鳥蛋", vendor: "紘吉", unit: "斤", zone: "海鮮" },
-                // 湯區
-                { id: 3001, name: "豆漿", vendor: "美食家", unit: "籃", zone: "湯區" },
-                { id: 3002, name: "雞骨", vendor: "天誠", unit: "件", zone: "湯區" },
-                { id: 3003, name: "米酒", vendor: "津鼎", unit: "罐", zone: "湯區" },
-                // 熟食
-                { id: 4001, name: "粽葉", vendor: "美食家", unit: "包", zone: "熟食" },
-                { id: 4002, name: "酥皮", vendor: "美食家", unit: "箱", zone: "熟食" },
-                { id: 4003, name: "肉丸", vendor: "怪獸披薩", unit: "箱", zone: "熟食" },
-                // 飲調
-                { id: 5001, name: "柳橙汁", vendor: "米可可", unit: "瓶", zone: "飲調" },
-                { id: 5002, name: "純糖粉", vendor: "美食家", unit: "包", zone: "飲調" },
-                // 冷台
-                { id: 6001, name: "烤鰻醬", vendor: "鼎津", unit: "罐", zone: "冷台" },
-                { id: 6002, name: "壽司米", vendor: "美食家", unit: "包", zone: "冷台" },
-                // 輕食
-                { id: 7001, name: "奶酒", vendor: "津鼎", unit: "罐", zone: "輕食區" },
-                { id: 7002, name: "卡士達粉", vendor: "德麥", unit: "包", zone: "輕食區" },
-            ]);
-
-            const [selectedBranch, setSelectedBranch] = React.useState(branches[0] || "");
+            const [analyticsTab, setAnalyticsTab] = React.useState('monthly'); 
+            
             const [orderDate, setOrderDate] = React.useState(() => {
                 const d = new Date();
                 d.setDate(d.getDate() + 1);
                 return d.toISOString().split('T')[0];
             });
+
             const [selectedZone, setSelectedZone] = React.useState(null);
             const [orderQuantities, setOrderQuantities] = React.useState({});
             const [searchQuery, setSearchQuery] = React.useState('');
             const [copyStatus, setCopyStatus] = React.useState({});
             const [draggedId, setDraggedId] = React.useState(null);
             const [overId, setOverId] = React.useState(null);
+            const [editedOrderTexts, setEditedOrderTexts] = React.useState({});
 
             const [adminZoneFilter, setAdminZoneFilter] = React.useState('全部');
             const [adminVendorFilter, setAdminVendorFilter] = React.useState('全部');
-            const [newItem, setNewItem] = React.useState({ name: '', vendor: '鑫羿', unit: '包', zone: '菜區' });
+            const [newItem, setNewItem] = React.useState({ name: '', vendor: '', unit: '包', zone: '菜區' });
             const [newVendorName, setNewVendorName] = React.useState('');
             const [newBranchName, setNewBranchName] = React.useState('');
             const [newZoneName, setNewZoneName] = React.useState('');
 
-            // 拖曳排序邏輯
-            const handleDragStart = (id) => setDraggedId(id);
-            const handleDragOver = (e, id) => {
-                e.preventDefault();
-                if (id !== draggedId) setOverId(id);
+            const updateCurrentDb = (newData) => {
+                setStoreDatabases(prev => ({
+                    ...prev,
+                    [selectedBranch]: { ...prev[selectedBranch], ...newData }
+                }));
             };
+
+            const saveOrderToHistory = () => {
+                const orderItems = currentDb.ingredients
+                    .map(item => ({
+                        name: item.name,
+                        qty: parseFloat(orderQuantities[item.id] || 0),
+                        unit: item.unit
+                    }))
+                    .filter(i => i.qty > 0);
+                if (orderItems.length === 0) return;
+                const newHistoryRecord = {
+                    id: Date.now(),
+                    date: orderDate,
+                    timestamp: new Date().toLocaleString(),
+                    items: orderItems
+                };
+                updateCurrentDb({ history: [...currentDb.history, newHistoryRecord] });
+            };
+
+            const monthlyStats = React.useMemo(() => {
+                const stats = {};
+                const currentMonth = orderDate.substring(0, 7);
+                currentDb.history.forEach(record => {
+                    if (record.date.startsWith(currentMonth)) {
+                        record.items.forEach(item => {
+                            stats[item.name] = (stats[item.name] || 0) + item.qty;
+                        });
+                    }
+                });
+                return stats;
+            }, [currentDb.history, orderDate]);
+
+            const getComparisonData = (itemName) => {
+                const currentMonth = orderDate.substring(0, 7);
+                return branches.map(branch => {
+                    const db = storeDatabases[branch];
+                    let total = 0;
+                    db.history.forEach(record => {
+                        if (record.date.startsWith(currentMonth)) {
+                            const match = record.items.find(i => i.name === itemName);
+                            if (match) total += match.qty;
+                        }
+                    });
+                    return { branch, total };
+                });
+            };
+
+            const handleDragStart = (id) => setDraggedId(id);
+            const handleDragOver = (e, id) => { e.preventDefault(); if (id !== draggedId) setOverId(id); };
             const handleDragEnd = () => {
                 if (draggedId !== null && overId !== null) {
-                    const newIngredients = [...ingredients];
+                    const newIngredients = [...currentDb.ingredients];
                     const fromIndex = newIngredients.findIndex(i => i.id === draggedId);
                     const toIndex = newIngredients.findIndex(i => i.id === overId);
                     const [movedItem] = newIngredients.splice(fromIndex, 1);
                     newIngredients.splice(toIndex, 0, movedItem);
-                    setIngredients(newIngredients);
+                    updateCurrentDb({ ingredients: newIngredients });
                 }
                 setDraggedId(null);
                 setOverId(null);
             };
 
             const groupedOrders = React.useMemo(() => {
-                const list = ingredients
+                const list = currentDb.ingredients
                     .map(item => ({ ...item, orderQty: parseFloat(orderQuantities[item.id] || 0) }))
                     .filter(i => i.orderQty > 0);
                 return list.reduce((acc, item) => {
@@ -194,33 +248,39 @@
                     acc[item.vendor].push(item);
                     return acc;
                 }, {});
-            }, [ingredients, orderQuantities]);
+            }, [currentDb.ingredients, orderQuantities]);
 
-            const getVendorText = (vendorName, items) => {
-                const [y, m, d] = orderDate.split('-');
-                const dateStr = `${parseInt(m)}/${parseInt(d)}`;
-                let text = `${selectedBranch} ${dateStr}\n`;
-                items.forEach(item => { text += `${item.name}${item.orderQty}${item.unit}\n`; });
-                return text.trim();
+            React.useEffect(() => {
+                if (view === 'result') {
+                    const initialTexts = {};
+                    const [y, m, d] = orderDate.split('-');
+                    const dateStr = `${parseInt(m)}/${parseInt(d)}`;
+                    Object.entries(groupedOrders).forEach(([vendor, items]) => {
+                        let text = `${selectedBranch} ${dateStr}\n`;
+                        items.forEach(item => { text += `${item.name}${item.orderQty}${item.unit}\n`; });
+                        initialTexts[vendor] = text.trim();
+                    });
+                    setEditedOrderTexts(initialTexts);
+                }
+            }, [view, groupedOrders, selectedBranch, orderDate]);
+
+            const handleTextChange = (vendor, newText) => {
+                setEditedOrderTexts(prev => ({ ...prev, [vendor]: newText }));
             };
 
-            const handleShare = async (vendorName, items) => {
-                const text = getVendorText(vendorName, items);
+            const handleShare = async (vendorName) => {
+                saveOrderToHistory(); 
+                const text = editedOrderTexts[vendorName] || "";
                 const el = document.createElement('textarea');
                 el.value = text;
                 document.body.appendChild(el);
                 el.select();
                 document.execCommand('copy');
                 document.body.removeChild(el);
-
                 setCopyStatus({ ...copyStatus, [vendorName]: true });
                 setTimeout(() => setCopyStatus(prev => ({ ...prev, [vendorName]: false })), 3000);
-
                 if (navigator.share) {
-                    try {
-                        await navigator.share({ title: `訂貨單-${vendorName}`, text });
-                        return;
-                    } catch (err) {}
+                    try { await navigator.share({ title: `訂貨單-${vendorName}`, text }); return; } catch (err) {}
                 }
                 window.location.href = `https://line.me/R/msg/text/?${encodeURIComponent(text)}`;
             };
@@ -250,63 +310,81 @@
                                     <Icon name="Package" className="text-4xl" />
                                 </div>
                             </div>
-                            <h2 className="text-3xl font-black text-center text-slate-800 mb-2">智能分商點貨</h2>
-                            <p className="text-center text-slate-400 text-sm mb-12 font-medium">拖曳排序 • 分商下單 • 符號版</p>
+                            <h2 className="text-3xl font-black text-center text-slate-800 mb-1">智能分商點貨</h2>
+                            <p className="text-center text-slate-400 text-sm mb-10 font-medium">數據驅動 • 獨立資料庫</p>
 
-                            <div className="space-y-6 bg-white p-8 rounded-[3rem] shadow-xl border border-white">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">選擇分店</label>
-                                    <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)} className="w-full bg-slate-50 border-none rounded-2xl py-4.5 px-5 text-lg font-bold ring-1 ring-slate-100 outline-none">
-                                        {branches.map(b => <option key={b} value={b}>{b}</option>)}
-                                    </select>
+                            <div className="bg-white rounded-[3rem] shadow-xl border border-white overflow-hidden">
+                                <div className="flex flex-col">
+                                    <div className="bg-slate-50 px-8 py-5 border-b border-slate-100">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">選擇分店</label>
+                                        <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)} className="w-full bg-transparent border-none p-0 text-xl font-black outline-none mt-1 text-indigo-600">
+                                            {branches.map(b => <option key={b} value={b}>{b}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="px-8 py-5 border-b border-slate-100">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">進貨日期</label>
+                                        <input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} className="w-full bg-transparent border-none p-0 text-xl font-black outline-none mt-1" />
+                                    </div>
+                                    
+                                    <div className="p-8">
+                                        <button onClick={() => setView('zone_select')} className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-black text-lg shadow-xl flex items-center justify-center gap-3 active-scale transition-all">
+                                            開始點貨 <Icon name="ArrowRight" className="text-xl" />
+                                        </button>
+                                        
+                                        <div className="grid grid-cols-2 gap-3 mt-4">
+                                            <button onClick={() => setView('analytics')} className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 active-scale transition-all">
+                                                <Icon name="Chart" /> 數據分析報表
+                                            </button>
+                                            <button onClick={() => { setView('admin'); setAdminTab('ingredients'); }} className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 active-scale transition-all">
+                                                <Icon name="Settings" /> 店務管理後台
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">叫貨日期</label>
-                                    <input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} className="w-full bg-slate-50 border-none rounded-2xl py-4.5 px-5 text-lg font-bold ring-1 ring-slate-100 outline-none" />
-                                </div>
-                                <button onClick={() => setView('zone_select')} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-lg shadow-xl flex items-center justify-center gap-3 active-scale transition-all">
-                                    開始點貨 <Icon name="ArrowRight" className="text-xl" />
-                                </button>
-                                <button onClick={() => { setView('admin'); setAdminTab('ingredients'); }} className="w-full py-3 text-slate-400 font-bold text-xs flex items-center justify-center gap-2 hover:text-indigo-600 transition-colors">
-                                    <Icon name="Settings" /> 系統設定與管理
-                                </button>
                             </div>
                         </div>
                     )}
 
-                    {/* 2. 區站選擇 */}
+                    {/* 2. 區站選擇 - 已將按鈕往上移 */}
                     {view === 'zone_select' && (
                         <div className="max-w-md mx-auto">
-                            <Nav title="選擇區站" onBack={() => setView('setup')} />
-                            <div className="p-6 grid grid-cols-1 gap-4 pb-32">
-                                {zones.map((zone) => {
-                                    const zoneItems = ingredients.filter(i => i.zone === zone.name);
-                                    const activeCount = zoneItems.filter(i => (orderQuantities[i.id] || 0) > 0).length;
-                                    return (
-                                        <button key={zone.name} onClick={() => { setSelectedZone(zone.name); setView('inventory'); }} className={`p-5 rounded-[2.5rem] border transition-all active-scale flex items-center justify-between bg-white shadow-sm hover:border-indigo-200 ${activeCount > 0 ? 'border-indigo-200 ring-4 ring-indigo-50' : 'border-slate-100'}`}>
-                                            <div className="flex items-center gap-4">
-                                                <div className={`${zone.color} w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center font-black text-white text-2xl`}>
-                                                    <Icon name={zone.icon} />
+                            <Nav title={`${selectedBranch} - 區站`} onBack={() => setView('setup')} />
+                            <div className="p-6 space-y-6 pb-20">
+                                <div className="grid grid-cols-1 gap-4">
+                                    {currentDb.zones.map((zone) => {
+                                        const zoneItems = currentDb.ingredients.filter(i => i.zone === zone.name);
+                                        const activeCount = zoneItems.filter(i => (orderQuantities[i.id] || 0) > 0).length;
+                                        return (
+                                            <button key={zone.name} onClick={() => { setSelectedZone(zone.name); setView('inventory'); }} className={`p-5 rounded-[2.5rem] border transition-all active-scale flex items-center justify-between bg-white shadow-sm hover:border-indigo-200 ${activeCount > 0 ? 'border-indigo-200 ring-4 ring-indigo-50' : 'border-slate-100'}`}>
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`${zone.color} w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center font-black text-white text-2xl`}>
+                                                        <Icon name={zone.icon} />
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <h3 className="font-black text-lg text-slate-800">{zone.name}</h3>
+                                                        <p className="text-xs font-bold text-slate-400">{activeCount > 0 ? `已點: ${activeCount} 項` : `清單共 ${zoneItems.length} 項`}</p>
+                                                    </div>
                                                 </div>
-                                                <div className="text-left">
-                                                    <h3 className="font-black text-lg text-slate-800">{zone.name}</h3>
-                                                    <p className="text-xs font-bold text-slate-400">{activeCount > 0 ? `已點: ${activeCount} 項` : `清單共 ${zoneItems.length} 項`}</p>
-                                                </div>
-                                            </div>
-                                            <Icon name="ChevronRight" className="text-slate-300 text-xl" />
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#F1F5F9] to-transparent pointer-events-none text-center">
-                                <button onClick={() => setView('result')} className="max-w-md mx-auto w-full bg-green-600 text-white py-5 rounded-2xl font-black shadow-2xl flex items-center justify-center gap-2 active-scale pointer-events-auto">
-                                    <Icon name="ClipboardCheck" /> 生成廠商訂單 ({Object.keys(groupedOrders).length})
-                                </button>
+                                                <Icon name="ChevronRight" className="text-slate-300 text-xl" />
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* 將「生成廠商訂單」按鈕從固定底部移至此處，緊跟在列表後方 */}
+                                {Object.keys(groupedOrders).length > 0 && (
+                                    <button 
+                                        onClick={() => setView('result')} 
+                                        className="w-full bg-green-600 text-white py-5 rounded-3xl font-black shadow-2xl flex items-center justify-center gap-2 active-scale transition-all mt-2"
+                                    >
+                                        <Icon name="ClipboardCheck" /> 生成廠商訂單 ({Object.keys(groupedOrders).length})
+                                    </button>
+                                )}
                             </div>
                         </div>
                     )}
 
-                    {/* 3. 食材點貨頁面 (加減號修復) */}
+                    {/* 3. 食材點貨頁面 */}
                     {view === 'inventory' && (
                         <div className="max-w-md mx-auto">
                             <Nav title={selectedZone} onBack={() => { setView('zone_select'); setSearchQuery(''); }} />
@@ -316,52 +394,51 @@
                                     <input type="text" placeholder={`搜尋${selectedZone}...`} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none" />
                                 </div>
                             </div>
-                            <div className="p-4 space-y-4">
-                                {ingredients.filter(i => i.zone === selectedZone && i.name.includes(searchQuery)).map((item) => {
+                            <div className="p-4 space-y-4 pb-40">
+                                {currentDb.ingredients.filter(i => i.zone === selectedZone && i.name.includes(searchQuery)).map((item) => {
                                     const qty = orderQuantities[item.id] || 0;
                                     const isDragging = draggedId === item.id;
                                     const isOver = overId === item.id;
                                     return (
                                         <div key={item.id} draggable onDragStart={() => handleDragStart(item.id)} onDragOver={(e) => handleDragOver(e, item.id)} onDragEnd={handleDragEnd} className={`bg-white p-5 rounded-[2rem] border shadow-sm flex items-center justify-between transition-all duration-300 ${isDragging ? 'drag-ghost' : 'border-slate-100'} ${isOver ? 'border-indigo-400 translate-y-1 shadow-md' : ''}`}>
                                             <div className="flex items-center gap-4 flex-1 min-w-0">
-                                                <div className="p-1.5 text-slate-300 drag-handle font-black text-xl">
-                                                    <Icon name="GripVertical" />
-                                                </div>
+                                                <div className="p-1.5 text-slate-300 drag-handle font-black text-xl"><Icon name="GripVertical" /></div>
                                                 <div className="flex-1 min-w-0">
                                                     <h4 className="font-black text-slate-800 text-lg truncate leading-tight">{item.name}</h4>
                                                     <p className="text-[10px] font-black text-indigo-500 uppercase mt-0.5">{item.vendor}</p>
                                                 </div>
                                             </div>
-
                                             <div className="flex items-center gap-2 bg-slate-100/50 p-1.5 rounded-3xl shrink-0 ml-4">
-                                                <button 
-                                                    onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: Math.max(0, cur - 1) }); }} 
-                                                    className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center active-scale btn-touch text-slate-400 font-black text-2xl"
-                                                >
-                                                    <Icon name="Minus" />
-                                                </button>
+                                                <button onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: Math.max(0, cur - 1) }); }} className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center active-scale btn-touch text-slate-400 font-black text-2xl"><Icon name="Minus" /></button>
                                                 <div className="w-10 text-center">
                                                     <span className={`text-xl font-black ${qty === 0 ? 'text-slate-300' : 'text-indigo-600'}`}>{qty}</span>
                                                     <p className="text-[9px] text-slate-400 font-black">{item.unit}</p>
                                                 </div>
-                                                <button 
-                                                    onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: cur + 1 }); }} 
-                                                    className="w-12 h-12 bg-indigo-600 rounded-2xl shadow-lg flex items-center justify-center text-white active-scale btn-touch font-black text-2xl"
-                                                >
-                                                    <Icon name="Plus" />
-                                                </button>
+                                                <button onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: cur + 1 }); }} className="w-12 h-12 bg-indigo-600 rounded-2xl shadow-lg flex items-center justify-center text-white active-scale btn-touch font-black text-2xl"><Icon name="Plus" /></button>
                                             </div>
                                         </div>
                                     );
                                 })}
+                                <div className="mt-12 pt-6 border-t border-slate-200">
+                                    <button 
+                                        onClick={() => { setView('zone_select'); window.scrollTo(0,0); }}
+                                        className="w-full bg-white border-2 border-indigo-600 text-indigo-600 py-5 rounded-3xl font-black text-lg active-scale transition-all shadow-lg flex items-center justify-center gap-2"
+                                    >
+                                        <Icon name="ChevronLeft" /> 點貨完畢，返回區站選擇
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
 
+                    {/* 4. 結果頁面 */}
                     {view === 'result' && (
                         <div className="max-w-md mx-auto px-6">
-                            <Nav title="確認訂單" onBack={() => setView('zone_select')} />
+                            <Nav title="確認訂單並編輯" onBack={() => setView('zone_select')} />
                             <div className="space-y-8 pb-32 mt-6">
+                                <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 text-xs font-bold text-amber-700 leading-relaxed">
+                                    提示：點擊「發送」後系統會自動保存此次叫貨紀錄至數據報表中。
+                                </div>
                                 {Object.keys(groupedOrders).length === 0 ? (
                                     <div className="text-center py-24 bg-white rounded-[3rem] border border-dashed border-slate-200">
                                         <div className="font-black text-slate-200 text-5xl mb-4">?</div>
@@ -371,16 +448,16 @@
                                     Object.entries(groupedOrders).map(([vendor, items]) => (
                                         <div key={vendor} className="bg-white rounded-[2.5rem] shadow-xl border border-white overflow-hidden animate-in zoom-in-95 duration-300">
                                             <div className="p-6 bg-slate-900 flex items-center justify-between">
-                                                <h3 className="text-white font-black text-xl">{vendor}</h3>
-                                                <div className="bg-white/10 px-4 py-1.5 rounded-full text-[10px] text-white font-black tracking-widest uppercase">{items.length} 項</div>
+                                                <div>
+                                                    <h3 className="text-white font-black text-xl">{vendor}</h3>
+                                                    <p className="text-indigo-300 text-[10px] font-bold uppercase mt-1 flex items-center gap-1"><Icon name="Edit" className="w-3 h-3" /> 文字框可編輯</p>
+                                                </div>
+                                                <div className="bg-white/10 px-4 py-1.5 rounded-full text-[10px] text-white font-black uppercase">{items.length} 項</div>
                                             </div>
                                             <div className="p-6 space-y-5">
-                                                <div className="bg-slate-50 rounded-3xl p-5 font-mono text-sm text-slate-600 leading-relaxed whitespace-pre-wrap select-all border border-slate-100">
-                                                    {getVendorText(vendor, items)}
-                                                </div>
-                                                <button onClick={() => handleShare(vendor, items)} className={`w-full py-5 rounded-2xl font-black flex items-center justify-center gap-3 shadow-lg active-scale transition-all ${copyStatus[vendor] ? 'bg-green-500 text-white' : 'bg-blue-600 text-white shadow-blue-100'}`}>
-                                                    <Icon name={copyStatus[vendor] ? "CheckCircle2" : "Share2"} />
-                                                    {copyStatus[vendor] ? '內容已複製！' : `發送訂單給 ${vendor}`}
+                                                <textarea className="editable-order-text no-scrollbar" rows={Math.max(4, (editedOrderTexts[vendor]?.split('\n').length || 0) + 1)} value={editedOrderTexts[vendor] || ""} onChange={(e) => handleTextChange(vendor, e.target.value)} />
+                                                <button onClick={() => handleShare(vendor)} className={`w-full py-5 rounded-2xl font-black flex items-center justify-center gap-3 shadow-lg active-scale transition-all ${copyStatus[vendor] ? 'bg-green-500 text-white' : 'bg-blue-600 text-white shadow-blue-100'}`}>
+                                                    <Icon name={copyStatus[vendor] ? "CheckCircle2" : "Share2"} /> {copyStatus[vendor] ? '紀錄已保存！已複製內容' : `發送訂單給 ${vendor}`}
                                                 </button>
                                             </div>
                                         </div>
@@ -390,22 +467,94 @@
                         </div>
                     )}
 
-                    {/* 5. 後台管理 (垃圾桶 x 修正) */}
+                    {/* 數據分析報表頁面 */}
+                    {view === 'analytics' && (
+                        <div className="max-w-md mx-auto">
+                            <Nav title={`${selectedBranch} - 數據報表`} onBack={() => setView('setup')} />
+                            <div className="flex bg-white border-b border-slate-100 px-4 py-3 gap-2 sticky top-[61px] z-50 shadow-sm">
+                                <button onClick={() => setAnalyticsTab('monthly')} className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${analyticsTab === 'monthly' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}>每月匯總</button>
+                                <button onClick={() => setAnalyticsTab('comparison')} className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${analyticsTab === 'comparison' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}>分店需求比較</button>
+                            </div>
+                            <div className="p-6 space-y-6">
+                                {analyticsTab === 'monthly' && (
+                                    <div className="space-y-6 animate-in fade-in duration-300">
+                                        <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
+                                            <h3 className="font-black text-slate-800 text-lg mb-4 flex items-center gap-2"><Icon name="Calendar" className="text-indigo-600" /> {orderDate.substring(0,7)} 叫貨總量</h3>
+                                            <div className="space-y-3">
+                                                {Object.entries(monthlyStats).length === 0 ? (
+                                                    <p className="text-center py-10 text-slate-300 font-bold italic">本月尚無叫貨紀錄</p>
+                                                ) : (
+                                                    Object.entries(monthlyStats).map(([name, total]) => (
+                                                        <div key={name} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0">
+                                                            <span className="font-bold text-slate-600">{name}</span>
+                                                            <span className="font-black text-indigo-600 text-lg">{total} <span className="text-[10px] text-slate-400">當月累計</span></span>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <h4 className="px-4 font-black text-[10px] text-slate-400 uppercase tracking-widest">最近叫貨歷史</h4>
+                                            {currentDb.history.slice().reverse().map(record => (
+                                                <div key={record.id} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <span className="font-black text-slate-800">{record.date}</span>
+                                                        <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-full text-slate-400">{record.timestamp}</span>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {record.items.map((item, idx) => (<span key={idx} className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg">{item.name}{item.qty}{item.unit}</span>))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {analyticsTab === 'comparison' && (
+                                    <div className="space-y-6 animate-in fade-in duration-300">
+                                        {Object.keys(monthlyStats).map(itemName => (
+                                            <div key={itemName} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+                                                <h3 className="font-black text-slate-800 border-l-4 border-indigo-600 pl-3">{itemName} - 分店對比</h3>
+                                                <div className="space-y-4">
+                                                    {getComparisonData(itemName).map(data => {
+                                                        const max = Math.max(...getComparisonData(itemName).map(d => d.total)) || 1;
+                                                        const width = (data.total / max) * 100;
+                                                        return (
+                                                            <div key={data.branch} className="space-y-1">
+                                                                <div className="flex justify-between text-[11px] font-black uppercase tracking-tight">
+                                                                    <span className={data.branch === selectedBranch ? "text-indigo-600" : "text-slate-400"}>{data.branch}</span>
+                                                                    <span className="text-slate-800">{data.total} 單位</span>
+                                                                </div>
+                                                                <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                                                                    <div className={`h-full transition-all duration-1000 ${data.branch === selectedBranch ? 'bg-indigo-600' : 'bg-slate-300'}`} style={{ width: `${width}%` }}></div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {Object.keys(monthlyStats).length === 0 && <p className="text-center py-20 text-slate-300 font-bold italic">尚無數據可供比較</p>}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 後台管理 */}
                     {view === 'admin' && (
                         <div className="max-w-md mx-auto">
-                            <Nav title="系統管理" onBack={() => setView('setup')} />
+                            <Nav title={`${selectedBranch} - 管理`} onBack={() => setView('setup')} />
                             <div className="flex bg-white border-b border-slate-100 px-4 py-3 gap-2 overflow-x-auto no-scrollbar shadow-sm sticky top-[61px] z-50">
                                 {[
                                     { id: 'ingredients', label: '食材', icon: 'Layers' }, 
                                     { id: 'vendors', label: '廠商', icon: 'Filter' }, 
-                                    { id: 'branches', label: '分店', icon: 'Building2' }
+                                    { id: 'branches', label: '分店管理', icon: 'Building2' }
                                 ].map(tab => (
                                     <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`px-5 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap ${adminTab === tab.id ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100'}`}>
                                         <Icon name={tab.icon} /> {tab.label}
                                     </button>
                                 ))}
                             </div>
-
                             <div className="p-6 space-y-6 pb-20">
                                 {adminTab === 'ingredients' && (
                                     <div className="space-y-6">
@@ -414,31 +563,30 @@
                                             <input placeholder="食材名稱" className="w-full bg-slate-50 rounded-xl p-4 font-bold outline-none ring-1 ring-slate-100" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
                                             <div className="grid grid-cols-2 gap-3">
                                                 <select className="bg-slate-50 rounded-xl p-4 font-bold outline-none" value={newItem.vendor} onChange={e => setNewItem({...newItem, vendor: e.target.value})}>
-                                                    {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                                                    <option value="">選擇廠商</option>
+                                                    {currentDb.vendors.map(v => <option key={v} value={v}>{v}</option>)}
                                                 </select>
                                                 <select className="bg-slate-50 rounded-xl p-4 font-bold outline-none" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})}>
                                                     {DEFAULT_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                                 </select>
                                             </div>
                                             <select className="w-full bg-slate-50 rounded-xl p-4 font-bold outline-none" value={newItem.zone} onChange={e => setNewItem({...newItem, zone: e.target.value})}>
-                                                {zones.map(z => <option key={z.name} value={z.name}>{z.name}</option>)}
+                                                {currentDb.zones.map(z => <option key={z.name} value={z.name}>{z.name}</option>)}
                                             </select>
-                                            <button onClick={() => { if(newItem.name) { setIngredients([...ingredients, { ...newItem, id: Date.now() }]); setNewItem({ ...newItem, name: '' }); } }} className="w-full bg-indigo-600 text-white p-5 rounded-2xl font-black shadow-lg">確認新增食材</button>
+                                            <button onClick={() => { if(newItem.name && newItem.vendor) { updateCurrentDb({ ingredients: [...currentDb.ingredients, { ...newItem, id: Date.now() }] }); setNewItem({ ...newItem, name: '' }); } }} className="w-full bg-indigo-600 text-white p-5 rounded-2xl font-black shadow-lg">確認新增</button>
                                         </div>
-
                                         <div className="bg-slate-200/50 p-4 rounded-3xl grid grid-cols-2 gap-2">
-                                            <select className="bg-white rounded-xl p-2 text-xs font-bold border-none shadow-sm" value={adminZoneFilter} onChange={e => setAdminZoneFilter(e.target.value)}><option value="全部">全部區站</option>{zones.map(z => <option key={z.name} value={z.name}>{z.name}</option>)}</select>
-                                            <select className="bg-white rounded-xl p-2 text-xs font-bold border-none shadow-sm" value={adminVendorFilter} onChange={e => setAdminVendorFilter(e.target.value)}><option value="全部">全部廠商</option>{vendors.map(v => <option key={v} value={v}>{v}</option>)}</select>
+                                            <select className="bg-white rounded-xl p-2 text-xs font-bold border-none shadow-sm" value={adminZoneFilter} onChange={e => setAdminZoneFilter(e.target.value)}><option value="全部">全部區站</option>{currentDb.zones.map(z => <option key={z.name} value={z.name}>{z.name}</option>)}</select>
+                                            <select className="bg-white rounded-xl p-2 text-xs font-bold border-none shadow-sm" value={adminVendorFilter} onChange={e => setAdminVendorFilter(e.target.value)}><option value="全部">全部廠商</option>{currentDb.vendors.map(v => <option key={v} value={v}>{v}</option>)}</select>
                                         </div>
-
                                         <div className="space-y-2">
-                                            {ingredients.filter(i => (adminZoneFilter === '全部' || i.zone === adminZoneFilter) && (adminVendorFilter === '全部' || i.vendor === adminVendorFilter)).slice().reverse().map(item => (
+                                            {currentDb.ingredients.filter(i => (adminZoneFilter === '全部' || i.zone === adminZoneFilter) && (adminVendorFilter === '全部' || i.vendor === adminVendorFilter)).slice().reverse().map(item => (
                                                 <div key={item.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center shadow-sm border border-slate-50">
                                                     <div className="min-w-0 pr-4">
                                                         <p className="font-black text-slate-700 truncate">{item.name}</p>
                                                         <p className="text-[10px] font-bold text-slate-400 uppercase">{item.vendor} • {item.zone} • {item.unit}</p>
                                                     </div>
-                                                    <button onClick={() => setIngredients(ingredients.filter(i => i.id !== item.id))} className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl font-black text-xl"><Icon name="Trash2" /></button>
+                                                    <button onClick={() => updateCurrentDb({ ingredients: currentDb.ingredients.filter(i => i.id !== item.id) })} className="bg-rose-50 text-rose-400 p-2.5 rounded-xl"><Icon name="Trash2" /></button>
                                                 </div>
                                             ))}
                                         </div>
@@ -447,47 +595,20 @@
                                 {adminTab === 'vendors' && (
                                     <div className="space-y-6">
                                         <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex gap-3">
-                                            <input placeholder="新廠商名稱" className="flex-1 bg-slate-50 rounded-2xl p-4.5 font-bold outline-none ring-1 ring-slate-100" value={newVendorName} onChange={e => setNewVendorName(e.target.value)} />
-                                            <button onClick={() => { if(newVendorName) {setVendors([...vendors, newVendorName]); setNewVendorName('');} }} className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增</button>
+                                            <input placeholder="新廠商名稱" className="flex-1 bg-slate-50 rounded-2xl p-4.5 font-bold outline-none ring-1 ring-slate-100 border-none" value={newVendorName} onChange={e => setNewVendorName(e.target.value)} />
+                                            <button onClick={() => { if(newVendorName) { updateCurrentDb({ vendors: [...currentDb.vendors, newVendorName] }); setNewVendorName(''); } }} className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增</button>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {vendors.map(v => (
-                                                <div key={v} className="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-50">
-                                                    <span className="font-bold text-sm truncate">{v}</span>
-                                                    <button onClick={() => setVendors(vendors.filter(i => i !== v))} className="text-slate-300 font-black text-xl px-2"><Icon name="X" /></button>
-                                                </div>
-                                            ))}
-                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">{currentDb.vendors.map(v => (<div key={v} className="bg-white p-5 rounded-[1.5rem] flex justify-between items-center shadow-sm border border-slate-50"><span className="font-bold text-sm truncate">{v}</span><button onClick={() => updateCurrentDb({ vendors: currentDb.vendors.filter(i => i !== v) })} className="text-slate-300 hover:text-rose-500 font-black px-2"><Icon name="X" /></button></div>))}</div>
                                     </div>
                                 )}
                                 {adminTab === 'branches' && (
                                     <div className="space-y-8">
-                                        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex gap-3">
-                                            <input placeholder="新分店名稱" className="flex-1 bg-slate-50 rounded-2xl p-4.5 font-bold outline-none" value={newBranchName} onChange={e => setNewBranchName(e.target.value)} />
-                                            <button onClick={() => { if(newBranchName) {setBranches([...branches, newBranchName]); setNewBranchName('');} }} className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增</button>
-                                        </div>
-                                        <div className="space-y-2">
-                                            {branches.map(b => (
-                                                <div key={b} className="bg-white p-5 rounded-[1.5rem] flex justify-between items-center shadow-sm border border-slate-50 font-bold">
-                                                    <span>{b}</span>
-                                                    <button onClick={() => setBranches(branches.filter(i => i !== b))} className="text-slate-300 font-black text-xl px-2"><Icon name="Trash2" /></button>
-                                                </div>
-                                            ))}
-                                        </div>
+                                        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex gap-3"><input placeholder="新分店" className="flex-1 bg-slate-50 rounded-2xl p-4.5 font-bold" value={newBranchName} onChange={e => setNewBranchName(e.target.value)} /><button onClick={() => { if(newBranchName && !storeDatabases[newBranchName]) { setStoreDatabases(prev => ({ ...prev, [newBranchName]: { ingredients: [...TEMPLATE_INGREDIENTS], zones: [...INITIAL_ZONES], vendors: ["預設廠商"], history: [] } })); setBranches(prev => [...prev, newBranchName]); setNewBranchName(''); } }} className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增分店</button></div>
+                                        <div className="space-y-2">{branches.map(b => (<div key={b} className="bg-white p-5 rounded-[1.5rem] flex justify-between items-center shadow-sm border border-slate-50 font-bold"><span>{b}</span><button onClick={() => { const newDb = { ...storeDatabases }; delete newDb[b]; setStoreDatabases(newDb); setBranches(prev => prev.filter(i => i !== b)); if (selectedBranch === b) setSelectedBranch(branches.find(i => i !== b)); }} className="text-slate-300 hover:text-rose-500"><Icon name="Trash2" /></button></div>))}</div>
                                         <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
-                                            <h3 className="font-black text-slate-800 flex items-center gap-2"><Icon name="LayoutGrid" className="text-indigo-600" /> 區站管理</h3>
-                                            <div className="flex gap-2">
-                                                <input placeholder="新區站" className="flex-1 bg-slate-50 rounded-xl p-4 font-bold outline-none ring-1 ring-slate-100" value={newZoneName} onChange={e => setNewZoneName(e.target.value)} />
-                                                <button onClick={() => { if(newZoneName) { setZones([...zones, { name: newZoneName, icon: 'Package', color: 'bg-slate-500' }]); setNewZoneName(''); } }} className="bg-slate-900 text-white px-6 rounded-xl font-black">新增</button>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {zones.map(z => (
-                                                    <div key={z.name} className="bg-slate-50 px-4 py-3 rounded-xl flex justify-between items-center text-xs font-bold text-slate-700">
-                                                        <span>{z.name}</span>
-                                                        <button onClick={() => setZones(zones.filter(i => i.name !== z.name))} className="text-slate-300 font-black px-2"><Icon name="X" /></button>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                            <h3 className="font-black text-slate-800 flex items-center gap-2"><Icon name="LayoutGrid" className="text-indigo-600" /> {selectedBranch} 區站管理</h3>
+                                            <div className="flex gap-2"><input placeholder="新區站" className="flex-1 bg-slate-50 rounded-xl p-4 font-bold outline-none" value={newZoneName} onChange={e => setNewZoneName(e.target.value)} /><button onClick={() => { if(newZoneName) { updateCurrentDb({ zones: [...currentDb.zones, { name: newZoneName, icon: 'Package', color: 'bg-slate-500' }] }); setNewZoneName(''); } }} className="bg-slate-900 text-white px-6 rounded-xl font-black">新增</button></div>
+                                            <div className="grid grid-cols-2 gap-2">{currentDb.zones.map(z => (<div key={z.name} className="bg-slate-50 px-4 py-3 rounded-xl flex justify-between items-center text-xs font-bold text-slate-700 border border-slate-100"><span>{z.name}</span><button onClick={() => updateCurrentDb({ zones: currentDb.zones.filter(i => i.name !== z.name) })} className="text-slate-300 font-black px-2"><Icon name="X" /></button></div>))}</div>
                                         </div>
                                     </div>
                                 )}
