@@ -1,626 +1,771 @@
-<!DOCTYPE html>
-<html lang="zh-Hant">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智能分商點貨系統 - 數據分析版</title>
-    <!-- 核心庫加載 -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
 
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
-        body { 
-            font-family: 'Noto+Sans+TC', sans-serif; 
-            background-color: #F1F5F9;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        .drag-ghost {
-            opacity: 0.2;
-            transform: scale(0.95);
-            border: 2px dashed #4f46e5 !important;
-            background-color: #eef2ff !important;
-        }
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;900&family=Fredoka+One&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}
+#root{background:#1a1228;border-radius:14px;overflow:hidden;font-family:'Nunito',sans-serif}
+#gc{display:block;touch-action:none}
+#hud{display:flex;align-items:center;gap:6px;padding:5px 10px;background:rgba(20,15,35,0.95);border-top:2px solid rgba(255,255,255,0.08);flex-wrap:wrap;min-height:32px;backdrop-filter:blur(4px)}
+.bw{display:flex;align-items:center;gap:3px}
+.bl{font-size:8px;color:rgba(255,255,255,0.4);font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.bg{width:48px;height:7px;background:rgba(0,0,0,0.4);border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.1)}
+.bf{height:100%;border-radius:10px;transition:width .1s}
+#hpf{background:linear-gradient(90deg,#e84355,#ff7a85)}
+#stf{background:linear-gradient(90deg,#2ecc71,#7bed9f)}
+#drf{background:linear-gradient(90deg,#a29bfe,#6c5ce7)}
+.bv{font-size:10px;color:rgba(255,255,255,0.8);min-width:18px;font-weight:700}
+#inf{font-size:9px;color:rgba(255,255,255,0.5);margin-left:auto;white-space:nowrap;font-weight:600}
+#scr{font-size:10px;color:#ffd32a;font-weight:900;font-family:'Fredoka One',cursive}
+#clsnm{font-size:9px;color:#a29bfe;font-weight:700}
+#zodtag{font-size:9px;color:#fdcb6e;font-weight:700}
+#cntag{font-size:9px;color:#fd79a8;font-weight:700}
+#toast-wrap{position:relative;height:0;overflow:visible}
+#toast{position:absolute;left:50%;transform:translateX(-50%);top:4px;font-family:'Fredoka One',cursive;font-size:13px;color:#fff;text-align:center;background:rgba(30,20,50,0.92);border:1.5px solid rgba(255,255,255,0.2);border-radius:20px;padding:5px 16px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .2s;backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:10}
+#item-popup{position:absolute;left:50%;transform:translateX(-50%);top:32px;font-family:'Nunito',sans-serif;font-size:11px;color:#fff;text-align:center;background:rgba(20,12,40,0.95);border:1.5px solid rgba(255,220,100,0.4);border-radius:12px;padding:6px 14px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .25s;z-index:9;min-width:160px}
+#item-popup .ip-name{font-weight:900;font-size:13px;color:#ffd32a;font-family:'Fredoka One',cursive}
+#item-popup .ip-desc{color:rgba(255,255,255,0.7);font-size:10px;margin-top:2px}
+#weather-tag{font-size:8px;color:rgba(255,255,255,0.5);font-weight:700}
+</style>
+<div id="root">
+<div id="toast-wrap">
+  <div id="toast"></div>
+  <div id="item-popup"><div class="ip-name" id="ipn"></div><div class="ip-desc" id="ipd"></div></div>
+</div>
+<canvas id="gc"></canvas>
+<div id="hud">
+  <div id="clsnm">-</div><div id="zodtag">-</div><div id="cntag">-</div><div id="weather-tag">-</div>
+  <div class="bw"><span class="bl">HP</span><div class="bg"><div class="bf" id="hpf" style="width:100%"></div></div><span class="bv" id="hpv">100</span></div>
+  <div class="bw"><span class="bl">氣</span><div class="bg"><div class="bf" id="stf" style="width:100%"></div></div><span class="bv" id="stv">100</span></div>
+  <div class="bw"><span class="bl">耐</span><div class="bg"><div class="bf" id="drf" style="width:100%"></div></div><span class="bv" id="drv">100</span></div>
+  <div id="inf">Lv1·層1·殺0</div><div id="scr">0分</div>
+</div>
+</div>
+<script>
+var C=document.getElementById('gc'),X=C.getContext('2d'),root=document.getElementById('root');
+var W=500,H=360,isMobile=false,frame=0,dead=false,score=0,floorN=1;
+var eT=0,iT=0,toastTm=null,ipTm=null,showModal=null;
+var selStage=0,selClass=null,selZodiac=null,selChinese=null;
+var P=null,ENE=[],PROJ=[],PARTS=[],ITW=[],SPW=[],TRAPS=[],CRACKS=[],SCRAPS=[];
+var keys={},mouse={x:250,y:180};
+var joy={on:false,id:-1,cx:0,cy:0,dx:0,dy:0};
+var aimT={on:false,id:-1,ox:0,oy:0,ang:0,moved:false};
+var dashBtn={on:false,id:-1},shrBtn={on:false,id:-1};
+var MAP={w:2200,h:1800,camX:0,camY:0,camTX:0,camTY:0};
+var WALLS=[];
+var currentWeather=null,currentArena=null;
+var weatherEffects={rain:0,wind:{x:0,y:0},fog:0,lightning:0,sandstorm:0};
+var arenaParticles=[];
 
-        .active-scale:active { transform: scale(0.95); }
+// 10 WEATHERS
+var WEATHERS=[
+  {id:'clear',name:'晴空',icon:'☀',col:'#ffd32a',desc:'無特殊效果',effect:function(){}},
+  {id:'rain',name:'暴雨',icon:'🌧',col:'#74b9ff',desc:'地板濕滑，敵人移速-15%',effect:function(){weatherEffects.rain=1;}},
+  {id:'fog',name:'迷霧',icon:'🌫',col:'#dfe6e9',desc:'視野縮小，難以看清遠處',effect:function(){weatherEffects.fog=0.55;}},
+  {id:'storm',name:'雷暴',icon:'⛈',col:'#a29bfe',desc:'每20秒隨機閃電轟擊敵人',effect:function(){weatherEffects.lightning=1;}},
+  {id:'wind',name:'狂風',icon:'💨',col:'#81ecec',desc:'彈刀距離+40%，子彈偏移',effect:function(){weatherEffects.wind={x:(Math.random()-.5)*2,y:(Math.random()-.5)*2};}},
+  {id:'snow',name:'飄雪',icon:'❄',col:'#b2bec3',desc:'武器轉速略降，凍結機率↑',effect:function(){}},
+  {id:'heat',name:'酷暑',icon:'🌡',col:'#e17055',desc:'氣力回復速度-30%',effect:function(){}},
+  {id:'sand',name:'沙暴',icon:'🏜',col:'#fdcb6e',desc:'道具能見度降低，武器磨損+20%',effect:function(){weatherEffects.sandstorm=1;}},
+  {id:'aurora',name:'極光',icon:'🌌',col:'#fd79a8',desc:'法術威力+30%，視覺絢麗',effect:function(){}},
+  {id:'eclipse',name:'日蝕',icon:'🌑',col:'#636e72',desc:'敵人更強但掉落翻倍',effect:function(){}},
+];
+// 20 ARENAS
+var ARENAS=[
+  {id:'forest',name:'古木森林',col:'#00b894',floor:'#0d2b1a',wall:'#1a4a2a',desc:'參天古樹遮蔽，荊棘叢生'},
+  {id:'cave',name:'水晶洞窟',col:'#6c5ce7',floor:'#0d0d2b',wall:'#1a1a4a',desc:'水晶反光，地底深處'},
+  {id:'desert',name:'焦土荒漠',col:'#e17055',floor:'#2b1a0d',wall:'#4a2e1a',desc:'熱浪翻滾，黃沙漫天'},
+  {id:'snow_field',name:'雪原廢墟',col:'#74b9ff',floor:'#0d1a2b',wall:'#1a2e4a',desc:'白雪皚皚，古城廢墟'},
+  {id:'volcano',name:'熔岩火山',col:'#e84355',floor:'#2b0d0d',wall:'#4a1a1a',desc:'熔岩流淌，火山威脅'},
+  {id:'sky',name:'天空浮島',col:'#fdcb6e',floor:'#0d1a2b',wall:'#1a2e4a',desc:'雲端之上，浮空島嶼'},
+  {id:'swamp',name:'毒霧沼澤',col:'#55efc4',floor:'#0d2b1a',wall:'#1a4a2a',desc:'毒氣彌漫，危機四伏'},
+  {id:'ruins',name:'古代遺跡',col:'#fdcb6e',floor:'#1a150d',wall:'#2e250d',desc:'古老文明遺址'},
+  {id:'ocean',name:'深海神殿',col:'#0984e3',floor:'#0d1a2b',wall:'#0a1525',desc:'海底古廟，水壓巨大'},
+  {id:'ice',name:'永凍冰宮',col:'#b2bec3',floor:'#0a1520',wall:'#0d1a28',desc:'冰封王宮，滑不溜丟'},
+  {id:'moon',name:'月面隕坑',col:'#636e72',floor:'#111118',wall:'#1a1a22',desc:'低重力環境，跳躍更遠'},
+  {id:'magic',name:'魔法學院',col:'#a29bfe',floor:'#120d2b',wall:'#1e1545',desc:'魔力充沛，法術增幅'},
+  {id:'graveyard',name:'幽靈墓地',col:'#b2bec3',floor:'#0d110d',wall:'#1a1e1a',desc:'亡靈橫行，陰氣逼人'},
+  {id:'market',name:'廢棄市集',col:'#fdcb6e',floor:'#1a150d',wall:'#2a200f',desc:'道具多但敵人也強'},
+  {id:'arena',name:'競技圓場',col:'#e17055',floor:'#1a0d0d',wall:'#2a1010',desc:'觀眾席轟鳴，熱血沸騰'},
+  {id:'library',name:'禁書圖書館',col:'#a29bfe',floor:'#0d0d1a',wall:'#15152a',desc:'知識力量，法術書++'},
+  {id:'jungle',name:'遠古叢林',col:'#00b894',floor:'#0d1a0d',wall:'#1a2e1a',desc:'叢林法則，強者生存'},
+  {id:'city',name:'廢棄都市',col:'#636e72',floor:'#111115',wall:'#1e1e22',desc:'都市廢墟，掩體豐富'},
+  {id:'tower',name:'魔王塔頂',col:'#e84355',floor:'#1a0d0d',wall:'#2a0d0d',desc:'最終決戰場地'},
+  {id:'dream',name:'夢境迷宮',col:'#fd79a8',floor:'#0d0d1a',wall:'#1a0d1e',desc:'虛實交錯，方向迷亂'},
+];
 
-        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .drag-handle { cursor: grab; }
-        .drag-handle:active { cursor: grabbing; }
+function rollWeatherArena(){
+  currentWeather=WEATHERS[Math.floor(Math.random()*WEATHERS.length)];
+  currentArena=ARENAS[Math.floor(Math.random()*ARENAS.length)];
+  weatherEffects={rain:0,wind:{x:0,y:0},fog:0,lightning:0,sandstorm:0};
+  if(currentWeather.effect)currentWeather.effect();
+  document.getElementById('weather-tag').textContent=currentWeather.icon+currentWeather.name+'·'+currentArena.name;
+}
 
-        .btn-touch {
-            min-width: 44px;
-            min-height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+var CLASSES=[
+  {id:'crag',name:'碎岩者',col:'#EF9F27',emoji:'⬟',hp:140,st:80,atk:28,rad:34,len:20,as:0.032,mass:3,skA:'震盪猛擊',skAcost:20,skB:'磁化吸引',skBcost:15},
+  {id:'flicker',name:'瞬閃影刃',col:'#9FE1CB',emoji:'◎',hp:80,st:120,atk:14,rad:28,len:14,as:0.09,mass:0.5,skA:'影分身',skAcost:25,skB:'瞬步刺',skBcost:18},
+  {id:'weaver',name:'秘法織者',col:'#AFA9EC',emoji:'✦',hp:90,st:150,atk:16,rad:32,len:16,as:0.044,mass:1,skA:'元素共振',skAcost:30,skB:'超載',skBcost:20},
+  {id:'warden',name:'森之守衛',col:'#97C459',emoji:'⊛',hp:110,st:100,atk:18,rad:36,len:22,as:0.048,mass:1.2,skA:'自然之攫',skAcost:22,skB:'生命綻放',skBcost:28},
+  {id:'aegis',name:'輝光之盾',col:'#85B7EB',emoji:'⬡',hp:160,st:90,atk:12,rad:44,len:26,as:0.028,mass:4,skA:'盾擊衝鋒',skAcost:25,skB:'奉獻領域',skBcost:35},
+  {id:'etoile',name:'幻奏劍伶',col:'#F4C0D1',emoji:'✧',hp:95,st:110,atk:20,rad:34,len:20,as:0.044,mass:1,skA:'舞步切換',skAcost:0,skB:'萬劍歸一',skBcost:40},
+  {id:'hunter',name:'獵空神衛',col:'#FAC775',emoji:'↑',hp:85,st:130,atk:18,rad:38,len:18,as:0.05,mass:0.8,skA:'箭雨風暴',skAcost:22,skB:'集中火線',skBcost:18},
+  {id:'lancer',name:'龍鱗破軍',col:'#D4537E',emoji:'↟',hp:120,st:100,atk:24,rad:52,len:30,as:0.036,mass:2,skA:'螺旋衝刺',skAcost:20,skB:'橫掃千軍',skBcost:28},
+];
+var ZODIACS=[
+  {id:'aries',name:'♈白羊',col:'#e84355',passive:'撞擊回饋',desc:'衝刺碰撞力+30%不損耐久'},
+  {id:'taurus',name:'♉金牛',col:'#97C459',passive:'穩健格擋',desc:'碰撞耐久損失-20%'},
+  {id:'gemini',name:'♊雙子',col:'#9FE1CB',passive:'鏡像殘響',desc:'技能25%觸發雙倍'},
+  {id:'cancer',name:'♋巨蟹',col:'#74b9ff',passive:'潮汐領域',desc:'半徑隨時間脈動'},
+  {id:'leo',name:'♌獅子',col:'#ffd32a',passive:'震懾金光',desc:'10秒後碰撞致盲'},
+  {id:'virgo',name:'♍處女',col:'#00b894',passive:'完美刀鋒',desc:'磨刀石永久+2%攻擊'},
+  {id:'libra',name:'♎天秤',col:'#a29bfe',passive:'對等反彈',desc:'以弱勝強加速'},
+  {id:'scorpio',name:'♏天蠍',col:'#55efc4',passive:'劇毒侵蝕',desc:'碰撞15%腐蝕武器'},
+  {id:'sagittarius',name:'♐射手',col:'#fdcb6e',passive:'擴張視界',desc:'半徑+20%速度傷害↑'},
+  {id:'capricorn',name:'♑魔羯',col:'#b2bec3',passive:'大地意志',desc:'靜止1秒護盾+轉速↑'},
+  {id:'aquarius',name:'♒水瓶',col:'#74b9ff',passive:'真空軌道',desc:'自動吸附道具'},
+  {id:'pisces',name:'♓雙魚',col:'#fd79a8',passive:'泡沫殘影',desc:'武器碎後殘影3秒'},
+];
+var CHINESE=[
+  {id:'rat',name:'鼠',emoji:'🐭',col:'#9FE1CB',passive:'貪婪之牙',desc:'碰撞10%偷取耐久'},
+  {id:'ox',name:'牛',emoji:'🐮',col:'#b2bec3',passive:'負重前行',desc:'移速-5%擊退抗性↑'},
+  {id:'tiger',name:'虎',emoji:'🐯',col:'#fdcb6e',passive:'威壓爆裂',desc:'擊碎敵武器攻擊+20%5秒'},
+  {id:'rabbit',name:'兔',emoji:'🐰',col:'#fd79a8',passive:'狡兔三窟',desc:'額外衝刺+0.5秒無敵'},
+  {id:'dragon',name:'龍',emoji:'🐲',col:'#D4537E',passive:'神力附魔',desc:'法術效果+30%'},
+  {id:'snake',name:'蛇',emoji:'🐍',col:'#55efc4',passive:'毒牙倒鉤',desc:'碰撞後敵武器質量↓'},
+  {id:'horse',name:'馬',emoji:'🐴',col:'#ffd32a',passive:'奔騰動能',desc:'移速越快旋轉越快'},
+  {id:'sheep',name:'羊',emoji:'🐑',col:'#a29bfe',passive:'溫順回響',desc:'碰撞15%不損耐久+回血'},
+  {id:'monkey',name:'猴',emoji:'🐒',col:'#fdcb6e',passive:'乾坤挪移',desc:'技能後下次碰撞換位'},
+  {id:'rooster',name:'雞',emoji:'🐔',col:'#ffd32a',passive:'鬥志高昂',desc:'新層前15秒轉速暴擊↑'},
+  {id:'dog',name:'狗',emoji:'🐶',col:'#74b9ff',passive:'護主靈光',desc:'後方攻擊自動防禦'},
+  {id:'pig',name:'豬',emoji:'🐷',col:'#fd79a8',passive:'福厚之軀',desc:'武器碎後無敵護盾+移速'},
+];
 
-        .editable-order-text {
-            background-color: #1e293b;
-            color: #f8fafc;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-            line-height: 1.625;
-            width: 100%;
-            border-radius: 1.5rem;
-            padding: 1.25rem;
-            resize: none;
-            outline: none;
-            border: 2px solid transparent;
-            transition: border-color 0.2s;
-        }
-        .editable-order-text:focus {
-            border-color: #6366f1;
-        }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
+var SPELLS=[{n:'火球',e:'🔥',col:'#e17055',cost:22},{n:'手裡劍',e:'✦',col:'#b2bec3',cost:18},{n:'雷電',e:'⚡',col:'#fdcb6e',cost:32},{n:'盾牌',e:'🛡',col:'#74b9ff',cost:38},{n:'冰凍',e:'❄',col:'#a29bfe',cost:26}];
+var ITMS=[
+  {n:'磨刀石',e:'🪨',col:'#9FE1CB',fn:'whet',desc:'恢復武器耐久'},
+  {n:'淬火石',e:'💥',col:'#fdcb6e',fn:'whet2',desc:'耐久恢復+下次碰撞爆炸'},
+  {n:'回血草',e:'🌿',col:'#e84355',fn:'heal',desc:'恢復35點生命值'},
+  {n:'氣力石',e:'💎',col:'#00b894',fn:'stam',desc:'恢復50點氣力'},
+  {n:'法術書',e:'📖',col:'#a29bfe',fn:'spell',desc:'獲得隨機法術'},
+  {n:'速度符',e:'🌀',col:'#6c5ce7',fn:'spd',desc:'短暫大幅提升移動速度'},
+  {n:'炸彈',e:'💣',col:'#fdcb6e',fn:'bomb',desc:'爆炸傷害周圍敵人'},
+  {n:'磨刀老人',e:'👴',col:'#fdcb6e',fn:'grinder',desc:'犧牲HP換取永久攻擊力'},
+  {n:'賭博祭壇',e:'🎲',col:'#D4537E',fn:'gamble',desc:'攻擊翻倍但武器變脆'},
+];
 
-    <script type="text/babel">
-        /**
-         * 符號圖標組件
-         */
-        const Icon = ({ name, className = "" }) => {
-            const symbols = {
-                "ChevronLeft": "<",
-                "ChevronRight": ">",
-                "Plus": "+",
-                "Minus": "-",
-                "Settings": "＊",
-                "Trash2": "x",
-                "X": "x",
-                "Search": "找",
-                "Share2": "分享",
-                "ClipboardCheck": "V",
-                "Package": "貨",
-                "ArrowRight": "→",
-                "GripVertical": "::",
-                "CheckCircle2": "OK",
-                "Layers": "區",
-                "Filter": "選",
-                "Building2": "店",
-                "LayoutGrid": "分",
-                "Edit": "編",
-                "Chart": "圖",
-                "History": "歷",
-                "Carrot": "菜",
-                "Fish": "魚",
-                "Soup": "湯",
-                "UtensilsCrossed": "熱",
-                "IceCream": "冷",
-                "Coffee": "飲",
-                "Timer": "輕"
-            };
-            return <span className={`font-black select-none ${className}`}>{symbols[name] || "?"}</span>;
-        };
+function resize(){var mx=Math.min(window.innerWidth-4,680);isMobile=('ontouchstart' in window)||window.innerWidth<600;W=mx;H=isMobile?Math.round(W*0.76):Math.round(W*0.65);C.width=W;C.height=H;root.style.width=W+'px';}
+function sc(v){return v*(W/600);}
+function dist(ax,ay,bx,by){return Math.sqrt((ax-bx)*(ax-bx)+(ay-by)*(ay-by));}
 
-        const TEMPLATE_INGREDIENTS = [
-            { id: 1001, name: "高麗菜", vendor: "鑫羿", unit: "件", zone: "菜區" },
-            { id: 1002, name: "黑木耳", vendor: "大台北", unit: "盒", zone: "菜區" },
-            { id: 2001, name: "鱸魚", vendor: "元家", unit: "箱", zone: "海鮮" },
-            { id: 3001, name: "豆漿", vendor: "美食家", unit: "籃", zone: "湯區" }
-        ];
+var toastQueue=[];
+function toast(t){document.getElementById('toast').textContent=t;document.getElementById('toast').style.opacity=1;clearTimeout(toastTm);toastTm=setTimeout(function(){document.getElementById('toast').style.opacity=0;},1800);}
+function showItemPopup(name,desc,col){
+  var ip=document.getElementById('item-popup');
+  document.getElementById('ipn').textContent=name;
+  document.getElementById('ipn').style.color=col||'#ffd32a';
+  document.getElementById('ipd').textContent=desc||'';
+  ip.style.borderColor=(col||'#ffd32a')+'66';
+  ip.style.opacity=1;clearTimeout(ipTm);
+  ipTm=setTimeout(function(){ip.style.opacity=0;},3000);
+}
+function addP(x,y,c,n,sp){n=n||6;sp=sp||2;for(var i=0;i<n;i++){var a=Math.random()*Math.PI*2,v=sp*(0.4+Math.random());PARTS.push({x:x,y:y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,c:c,l:22+Math.random()*16,r:2+Math.random()*2.5});}}
+function roundRect(x,y,w,h,r){X.beginPath();X.moveTo(x+r,y);X.lineTo(x+w-r,y);X.arcTo(x+w,y,x+w,y+r,r);X.lineTo(x+w,y+h-r);X.arcTo(x+w,y+h,x+w-r,y+h,r);X.lineTo(x+r,y+h);X.arcTo(x,y+h,x,y+h-r,r);X.lineTo(x,y+r);X.arcTo(x,y,x+r,y,r);X.closePath();}
 
-        const INITIAL_ZONES = [
-            { name: "菜區", icon: 'Carrot', color: "bg-emerald-500" },
-            { name: "海鮮", icon: 'Fish', color: "bg-blue-500" },
-            { name: "湯區", icon: 'Soup', color: "bg-orange-500" },
-            { name: "熟食", icon: 'UtensilsCrossed', color: "bg-rose-500" },
-            { name: "冷台", icon: 'IceCream', color: "bg-cyan-500" },
-            { name: "飲調", icon: 'Coffee', color: "bg-amber-600" },
-            { name: "輕食區", icon: 'Timer', color: "bg-pink-500" }
-        ];
+function tipOf(ox,oy,sw2){
+  var t=sw2.orbitType||'circle',a=sw2.a,r=sw2.rad;
+  if(t==='ellipse')return{x:ox+Math.cos(a)*r,y:oy+Math.sin(a)*(r*0.42)};
+  if(t==='inf'){var s2=Math.sin(a),d2=1+s2*s2;return{x:ox+Math.cos(a)*r/d2,y:oy+Math.sin(a)*Math.cos(a)*r/d2};}
+  if(t==='square'){var nr=r/Math.max(Math.abs(Math.cos(a)),Math.abs(Math.sin(a)));return{x:ox+Math.cos(a)*nr,y:oy+Math.sin(a)*nr};}
+  return{x:ox+Math.cos(a)*r,y:oy+Math.sin(a)*r};
+}
+function joyCenter(){return{cx:sc(64),cy:H-sc(72),r:sc(52)};}
+function getBtns(){
+  var bw=sc(isMobile?48:44),bh=sc(isMobile?36:30);
+  var rx=W-sc(10),bot=H-sc(10);
+  return{
+    sp0:{x:rx-bw*4-sc(15),y:bot-bh*2-sc(6),w:bw,h:bh,col:'#a29bfe'},
+    sp1:{x:rx-bw*3-sc(10),y:bot-bh*2-sc(6),w:bw,h:bh,col:'#a29bfe'},
+    sp2:{x:rx-bw*2-sc(5),y:bot-bh*2-sc(6),w:bw,h:bh,col:'#a29bfe'},
+    skA:{x:rx-bw*4-sc(15),y:bot-bh,w:bw,h:bh,col:''},
+    skB:{x:rx-bw*3-sc(10),y:bot-bh,w:bw,h:bh,col:''},
+    shr:{x:rx-bw*2-sc(5),y:bot-bh,w:bw,h:bh,col:'#00b894'},
+    dsh:{x:rx-bw,y:bot-bh,w:bw,h:bh,col:'#6c5ce7'},
+  };
+}
+function inRect(b,x,y){return x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h;}
 
-        const DEFAULT_UNITS = ["件", "箱", "包", "斤", "顆", "條", "罐", "桶", "籃", "袋", "捲", "盒", "兩", "串", "瓶", "滿", "組"];
+function generateMap(){
+  WALLS=[];
+  var th=50;
+  WALLS.push({x:0,y:0,w:MAP.w,h:th},{x:0,y:MAP.h-th,w:MAP.w,h:th},{x:0,y:0,w:th,h:MAP.h},{x:MAP.w-th,y:0,w:th,h:MAP.h});
+  var pillars=[[380,280,55,180],[780,180,180,55],[580,560,55,160],[1180,380,160,55],[880,780,55,180],[1380,180,55,260],[280,880,180,55],[1080,980,55,180],[680,1180,180,55],[1480,780,160,55],[380,1280,55,160],[980,1380,180,55],[1680,500,55,200],[200,600,160,55],[1200,1200,200,55]];
+  for(var i=0;i<pillars.length;i++){var p=pillars[i];WALLS.push({x:p[0],y:p[1],w:p[2],h:p[3]});}
+}
 
-        function App() {
-            const [storeDatabases, setStoreDatabases] = React.useState({
-                "台北南港店": { 
-                    ingredients: [...TEMPLATE_INGREDIENTS], 
-                    zones: [...INITIAL_ZONES], 
-                    vendors: ["鑫羿", "大台北", "元家", "美食家"],
-                    history: [] 
-                },
-                "台北信義店": { 
-                    ingredients: [...TEMPLATE_INGREDIENTS], 
-                    zones: [...INITIAL_ZONES], 
-                    vendors: ["鑫羿", "大台北", "元家", "美食家"],
-                    history: []
-                }
-            });
+function spawnTraps(){
+  TRAPS=[];
+  // Reduced trap spawn rate
+  var n=Math.min(2+Math.floor(floorN/2),5);
+  var spots=[[500,500],[1000,400],[800,900],[1400,700],[600,1200]];
+  for(var i=0;i<n;i++){var tp=Math.random()<0.5?'saw':'flame';TRAPS.push({type:tp,x:spots[i][0],y:spots[i][1],r:32,ang:0,timer:Math.floor(Math.random()*80)});}
+}
+function spawnCracks(){
+  CRACKS=[];
+  var spots=[[200,200],[1800,200],[200,1400],[1800,1400]];
+  var n=Math.min(1+Math.floor(floorN/3),spots.length);
+  for(var i=0;i<n;i++){CRACKS.push({x:spots[i][0],y:spots[i][1],r:22,pulse:0,explored:false});}
+}
 
-            const [branches, setBranches] = React.useState(Object.keys(storeDatabases));
-            const [selectedBranch, setSelectedBranch] = React.useState(branches[0]);
-            
-            const currentDb = storeDatabases[selectedBranch] || { ingredients: [], zones: [], vendors: [], history: [] };
+function startGame(){
+  resize();selStage=3;
+  var cls=selClass,zod=selZodiac,cn=selChinese;
+  var spdMul=(cn.id==='ox')?0.95:(cn.id==='horse')?1.1:1.0;
+  var radBonus=(zod.id==='sagittarius')?1.2:1.0;
+  P={x:MAP.w/2,y:MAP.h/2,r:20,hp:cls.hp,mhp:cls.hp,st:cls.st,mst:cls.st,spd:2.8*spdMul,
+    classId:cls.id,className:cls.name,classCol:cls.col,classDef:cls,zodiac:zod,chinese:cn,
+    sw:{a:0,as:cls.as,rad:cls.rad*radBonus,baserad:cls.rad*radBonus,len:cls.len,dur:100,mdur:100,atk:cls.atk,poison:false,glass:false,orbitType:'circle',mass:cls.mass,explodeNext:false},
+    sw2:null,spells:[null,null,null],xp:0,xpN:30,lv:1,shield:0,shieldT:0,
+    dashCd:0,dashActive:0,dashVx:0,dashVy:0,spd2:0,poison:0,parry:0,kills:0,
+    skACd:0,skBCd:0,skAActive:0,skBActive:0,scraps:0,hardness:0,gearDir:1,
+    megaBladeTimer:0,megaBladeAngle:0,focusedSight:0,spiralCharge:0,consecZone:null,
+    vampireMode:0,phantomTimer:0,leoTimer:600,leoReady:false,capricornStill:0,capricornShield:0,
+    tideAngle:0,tideDir:1,atk_virgo_bonus:0,libra_speedTimer:0,roosterTimer:0,
+    monkeySwapReady:false,pigInvTimer:0,piscesBubbles:[],
+  };
+  ENE=[];PROJ=[];PARTS=[];ITW=[];SPW=[];TRAPS=[];CRACKS=[];SCRAPS=[];
+  floorN=1;score=0;dead=false;frame=0;eT=0;iT=0;showModal=null;
+  joy={on:false,id:-1,cx:0,cy:0,dx:0,dy:0};aimT={on:false,id:-1,ox:0,oy:0,ang:0,moved:false};
+  dashBtn={on:false,id:-1};shrBtn={on:false,id:-1};
+  rollWeatherArena();generateMap();spawnTraps();spawnCracks();
+  for(var i=0;i<5;i++)spawnE();
+  for(var i=0;i<2;i++)spawnI(); // Start with fewer items
+  MAP.camX=P.x-W/2;MAP.camY=P.y-H/2;
+  document.getElementById('clsnm').textContent=cls.name;
+  document.getElementById('zodtag').textContent=zod.name;
+  document.getElementById('cntag').textContent=cn.emoji+cn.name;
+}
 
-            const [view, setView] = React.useState('setup'); 
-            const [adminTab, setAdminTab] = React.useState('ingredients');
-            const [analyticsTab, setAnalyticsTab] = React.useState('monthly'); 
-            
-            const [orderDate, setOrderDate] = React.useState(() => {
-                const d = new Date();
-                d.setDate(d.getDate() + 1);
-                return d.toISOString().split('T')[0];
-            });
+function spawnE(){
+  var ex=100+Math.random()*(MAP.w-200),ey=100+Math.random()*(MAP.h-200);
+  if(P)while(dist(ex,ey,P.x,P.y)<350){ex=100+Math.random()*(MAP.w-200);ey=100+Math.random()*(MAP.h-200);}
+  var r=Math.random(),t=r<0.3?'slime':r<0.54?'goblin':r<0.72?'bat':r<0.9?'knight':'boss';
+  var eclipseBonus=currentWeather&&currentWeather.id==='eclipse'?1.3:1;
+  var cfgs={boss:{hp:(150+floorN*20)*eclipseBonus,r:28,spd:1.0,sR:55,sL:26,sA:12,col:'#e84355'},knight:{hp:(60+floorN*10)*eclipseBonus,r:18,spd:1.5,sR:38,sL:20,sA:9,col:'#74b9ff'},goblin:{hp:(28+floorN*5)*eclipseBonus,r:14,spd:1.85,sR:28,sL:17,sA:6,col:'#fdcb6e'},bat:{hp:(15+floorN*3)*eclipseBonus,r:11,spd:2.8,sR:22,sL:14,sA:4,col:'#55efc4'},slime:{hp:(20+floorN*4)*eclipseBonus,r:12,spd:0.85,sR:26,sL:15,sA:5,col:'#a29bfe'}};
+  var rainMul=currentWeather&&currentWeather.id==='rain'?0.85:1;
+  var cfg=cfgs[t];
+  ENE.push({x:ex,y:ey,type:t,hp:cfg.hp,mhp:cfg.hp,r:cfg.r,spd:cfg.spd*rainMul,col:cfg.col,sw:{a:Math.random()*Math.PI*2,as:(Math.random()-0.5)*0.036+0.028,rad:cfg.sR,len:cfg.sL,dur:cfg.sA*4,mdur:cfg.sA*4,atk:cfg.sA,orbitType:'circle',mass:1},fl:0,frz:0,psn:0,stun:0,vx:0,vy:0,slow:0,disarmed:0,_scrapped:false});
+}
+function spawnI(){
+  var x=100+Math.random()*(MAP.w-200),y=100+Math.random()*(MAP.h-200);
+  if(P)while(checkWallCollision(x,y,20)){x=100+Math.random()*(MAP.w-200);y=100+Math.random()*(MAP.h-200);}
+  var pool=ITMS.slice(0,7);
+  // Library arena: more spell books
+  if(currentArena&&(currentArena.id==='library'||currentArena.id==='magic')&&Math.random()<0.4)pool=[ITMS[4]];
+  // Market arena: more items
+  var extra=currentArena&&currentArena.id==='market';
+  var t=pool[Math.floor(Math.random()*pool.length)];
+  ITW.push({x:x,y:y,t:t,r:16,pulse:0});
+  // Special items are rare (15% base rate, reduced from before)
+  if(Math.random()<(extra?0.25:0.12)){var sp=ITMS[7+Math.floor(Math.random()*2)];ITW.push({x:x+50,y:y,t:sp,r:18,pulse:0,special:true});}
+}
 
-            const [selectedZone, setSelectedZone] = React.useState(null);
-            const [orderQuantities, setOrderQuantities] = React.useState({});
-            const [searchQuery, setSearchQuery] = React.useState('');
-            const [copyStatus, setCopyStatus] = React.useState({});
-            const [draggedId, setDraggedId] = React.useState(null);
-            const [overId, setOverId] = React.useState(null);
-            const [editedOrderTexts, setEditedOrderTexts] = React.useState({});
+function doSkillA(){
+  if(!P||showModal||selStage!==3)return;
+  var id=P.classId,cls=P.classDef,cost=cls.skAcost;
+  if(P.st<cost&&cost>0){toast('氣力不足！');return;}if(P.skACd>0){toast('技能冷卻中');return;}
+  P.st-=cost;
+  var ang=isMobile?(aimT.moved?aimT.ang:P.sw.a):Math.atan2(mouse.y+MAP.camY-P.y,mouse.x+MAP.camX-P.x);
+  if(id==='crag'){var OR=P.sw.rad;P.sw.rad=OR*2.2;for(var i=0;i<ENE.length;i++){var e=ENE[i];if(dist(P.x,P.y,e.x,e.y)<P.sw.rad+e.r){var kd=Math.atan2(e.y-P.y,e.x-P.x);e.vx=Math.cos(kd)*9;e.vy=Math.sin(kd)*8;e.stun=45;e.sw.dur=Math.max(0,e.sw.dur-30);addP(e.x,e.y,'#EF9F27',14,5);}}addP(P.x,P.y,'#EF9F27',24,6);setTimeout(function(){if(P)P.sw.rad=P.sw.baserad;},400);P.skACd=200;toast('震盪猛擊！');}
+  else if(id==='flicker'){var PHANTOMS=[];for(var k=0;k<3;k++){var pa=P.sw.a+k/3*Math.PI*2;PHANTOMS.push({x:P.x+Math.cos(pa)*30,y:P.y+Math.sin(pa)*30,ang:pa,timer:180});}P._phantoms=PHANTOMS;P.phantomTimer=180;P.skACd=240;toast('影分身之陣！');}
+  else if(id==='weaver'){var boom=P.spells.filter(function(s){return s;}).length>0?65:38;for(var i=0;i<ENE.length;i++){if(dist(P.x,P.y,ENE[i].x,ENE[i].y)<P.sw.rad*1.9){ENE[i].hp-=boom;ENE[i].stun=30;ENE[i].fl=10;var kd2=Math.atan2(ENE[i].y-P.y,ENE[i].x-P.x);ENE[i].vx=Math.cos(kd2)*5;ENE[i].vy=Math.sin(kd2)*5;}}addP(P.x,P.y,'#AFA9EC',20,4);P.skACd=200;toast('元素共振！');}
+  else if(id==='warden'){var nearest=null,nearD=99999;for(var i=0;i<ENE.length;i++){var d2=dist(P.x,P.y,ENE[i].x,ENE[i].y);if(d2<nearD){nearD=d2;nearest=ENE[i];}}if(nearest&&nearD<320){nearest.sw.dur=Math.max(0,nearest.sw.dur-40);nearest.stun=50;nearest.slow=120;addP(nearest.x,nearest.y,'#97C459',14,3);toast('自然之攫！');}P.skACd=180;}
+  else if(id==='aegis'){P.dashActive=18;P.dashCd=20;P.dashVx=Math.cos(ang);P.dashVy=Math.sin(ang);P.parry=18;P.skAActive=18;P.skACd=220;toast('盾擊衝鋒！');}
+  else if(id==='etoile'){var orbits=['circle','square','inf','ellipse'];var idx=orbits.indexOf(P.sw.orbitType);if(idx===-1)idx=0;P.sw.orbitType=orbits[(idx+1)%orbits.length];P.skACd=30;toast('軌跡切換:'+P.sw.orbitType);}
+  else if(id==='hunter'){for(var i=0;i<6;i++){(function(d,a2){setTimeout(function(){if(!P)return;PROJ.push({x:P.x,y:P.y,vx:Math.cos(a2)*4.5,vy:Math.sin(a2)*4.5,r:6,col:'#FAC775',dmg:30,life:200,type:'arrow'});},d);})(i*120,P.sw.a+i/6*Math.PI*2);}P.skACd=200;toast('箭雨風暴！');}
+  else if(id==='lancer'){P.spiralCharge=120;P.dashActive=120;var mv=getMoveDir();P.dashVx=mv.x||Math.cos(ang);P.dashVy=mv.y||Math.sin(ang);P.skACd=220;toast('螺旋衝刺！');}
+  if(P.zodiac.id==='gemini'&&Math.random()<0.25)setTimeout(function(){if(P)doSkillA();},250);
+  if(P.chinese.id==='monkey')P.monkeySwapReady=true;
+}
+function doSkillB(){
+  if(!P||showModal||selStage!==3)return;
+  var id=P.classId,cls=P.classDef,cost=cls.skBcost;
+  if(P.st<cost){toast('氣力不足！');return;}if(P.skBCd>0){toast('冷卻中');return;}
+  P.st-=cost;
+  var ang=isMobile?(aimT.moved?aimT.ang:P.sw.a):Math.atan2(mouse.y+MAP.camY-P.y,mouse.x+MAP.camX-P.x);
+  if(id==='crag'){P.skBActive=150;P.sw.rad=16;P.skBCd=200;toast('磁化吸引！');}
+  else if(id==='flicker'){P.dashActive=14;P.dashCd=30;P.dashVx=Math.cos(ang);P.dashVy=Math.sin(ang);P.parry=14;for(var i=0;i<ENE.length;i++){var e=ENE[i];if(dist(P.x,P.y,e.x,e.y)<130){var kd=Math.atan2(e.y-P.y,e.x-P.x);if(Math.abs(Math.cos(kd-ang))<0.65){e.hp-=22;e.stun=25;e.fl=8;addP(e.x,e.y,'#9FE1CB',8,3);}}}P.skBCd=180;toast('瞬步突刺！');}
+  else if(id==='weaver'){P.skBActive=240;P.sw.as=0.13;P.skBCd=200;toast('超載旋轉！');}
+  else if(id==='warden'){P.vampireMode=200;P.skBCd=220;addP(P.x,P.y,'#97C459',16,3);toast('生命綻放！');}
+  else if(id==='aegis'){P.consecZone={x:P.x,y:P.y,r:130,timer:400};P.skBCd=300;toast('奉獻領域！');}
+  else if(id==='etoile'){P.megaBladeTimer=300;P.megaBladeAngle=ang;P.skBCd=280;toast('萬劍歸一！');}
+  else if(id==='hunter'){P.focusedSight=200;P.skBCd=180;toast('集中火線！');}
+  else if(id==='lancer'){var sR=P.sw.baserad*2.3;for(var i=0;i<ENE.length;i++){var e=ENE[i];if(dist(P.x,P.y,e.x,e.y)<sR+e.r){var kd2=Math.atan2(e.y-P.y,e.x-P.x);e.vx=Math.cos(kd2)*7;e.vy=Math.sin(kd2)*7;e.sw.dur=Math.max(0,e.sw.dur-25);e.stun=40;addP(e.x,e.y,'#D4537E',12,4);}}addP(P.x,P.y,'#D4537E',24,6);P.skBCd=250;toast('橫掃千軍！');}
+  if(P.chinese.id==='monkey')P.monkeySwapReady=true;
+}
 
-            const [adminZoneFilter, setAdminZoneFilter] = React.useState('全部');
-            const [adminVendorFilter, setAdminVendorFilter] = React.useState('全部');
-            const [newItem, setNewItem] = React.useState({ name: '', vendor: '', unit: '包', zone: '菜區' });
-            const [newVendorName, setNewVendorName] = React.useState('');
-            const [newBranchName, setNewBranchName] = React.useState('');
-            const [newZoneName, setNewZoneName] = React.useState('');
+function gainXP(n){P.xp+=n;if(P.xp>=P.xpN){P.xp-=P.xpN;P.xpN=Math.floor(P.xpN*1.6);P.lv++;P.mhp+=20;P.hp=Math.min(P.mhp,P.hp+20);P.mst+=10;P.sw.mdur+=15;P.sw.atk+=3;toast('✨ 升級！Lv'+P.lv);addP(P.x,P.y,'#a29bfe',24,4);if(P.chinese.id==='rooster')P.roosterTimer=900;}}
 
-            const updateCurrentDb = (newData) => {
-                setStoreDatabases(prev => ({
-                    ...prev,
-                    [selectedBranch]: { ...prev[selectedBranch], ...newData }
-                }));
-            };
+function doModal(t){showModal={type:t};}
+function confirmModal(yes){
+  if(!showModal)return;
+  if(showModal.type==='grinder'){if(yes&&P.mhp>40){P.mhp-=20;P.hp=Math.min(P.mhp,P.hp);P.sw.atk+=8;toast('👴 磨刀！攻+8，最大HP-20');}else if(yes)toast('HP太低！');else toast('拒絕老人');}
+  else if(showModal.type==='gamble'){if(yes){P.sw.glass=true;P.sw.atk=Math.floor(P.sw.atk*2.5);P.sw.dur=30;P.sw.mdur=30;toast('🎲 玻璃劍！攻擊翻倍但極脆！');}else toast('拒絕賭博');}
+  showModal=null;
+}
+function collectI(it){
+  addP(it.x,it.y,it.t.col,12,2.5);
+  var fn=it.t.fn,name=it.t.n,desc=it.t.desc,col=it.t.col;
+  showItemPopup(name,desc,col);
+  if(fn==='whet'){P.sw.dur=Math.min(P.sw.mdur,P.sw.dur+60);if(P.sw2)P.sw2.dur=Math.min(P.sw2.mdur,P.sw2.dur+40);if(P.zodiac.id==='virgo'){P.atk_virgo_bonus=(P.atk_virgo_bonus||0)+0.02;P.sw.atk=Math.floor(P.classDef.atk*(1+P.atk_virgo_bonus));}}
+  else if(fn==='whet2'){P.sw.dur=Math.min(P.sw.mdur,P.sw.dur+50);P.sw.explodeNext=true;}
+  else if(fn==='heal'){P.hp=Math.min(P.mhp,P.hp+35);}
+  else if(fn==='stam'){P.st=Math.min(P.mst,P.st+50);}
+  else if(fn==='spell'){var avail=SPELLS.filter(function(s){return P.spells.indexOf(s.n)===-1;});var slot=P.spells.indexOf(null);if(avail.length>0&&slot!==-1){P.spells[slot]=avail[Math.floor(Math.random()*avail.length)].n;}else showItemPopup('法術書','法術欄已滿','#a29bfe');}
+  else if(fn==='spd'){P.spd2=380;}
+  else if(fn==='bomb'){for(var i=0;i<ENE.length;i++){if(dist(P.x,P.y,ENE[i].x,ENE[i].y)<160){ENE[i].hp-=72;ENE[i].fl=10;ENE[i].stun=40;addP(ENE[i].x,ENE[i].y,'#fdcb6e',14,3);}}addP(P.x,P.y,'#fdcb6e',22,5);}
+  else if(fn==='grinder')doModal('grinder');
+  else if(fn==='gamble')doModal('gamble');
+}
+function castSpell(idx){
+  if(showModal||selStage!==3||!P)return;
+  var spn=P.spells[idx];if(!spn)return;
+  var def=null;for(var i=0;i<SPELLS.length;i++){if(SPELLS[i].n===spn){def=SPELLS[i];break;}}if(!def)return;
+  var boost=(P.classId==='weaver'?1.5:1)*(P.chinese.id==='dragon'?1.3:1)*(currentWeather&&currentWeather.id==='aurora'?1.3:1);
+  if(P.st<def.cost){toast('氣力不足！');return;}P.st-=def.cost;
+  var ang=isMobile?(aimT.moved?aimT.ang:P.sw.a):Math.atan2(mouse.y+MAP.camY-P.y,mouse.x+MAP.camX-P.x);
+  var nx=Math.cos(ang),ny=Math.sin(ang);
+  var windX=(weatherEffects.wind&&weatherEffects.wind.x)||0,windY=(weatherEffects.wind&&weatherEffects.wind.y)||0;
+  if(spn==='火球'){PROJ.push({x:P.x,y:P.y,vx:nx*7.5+windX*0.5,vy:ny*7.5+windY*0.5,r:11,col:'#e17055',dmg:44*boost,life:200,type:'fire',trail:[]});}
+  else if(spn==='手裡劍'){for(var i=0;i<8;i++){var a=i/8*Math.PI*2;PROJ.push({x:P.x,y:P.y,vx:Math.cos(a)*6+windX*0.3,vy:Math.sin(a)*6+windY*0.3,r:6,col:'#b2bec3',dmg:23*boost,life:160,type:'shuriken',spin:0});}}
+  else if(spn==='雷電'){var sorted=ENE.slice().sort(function(a,b){return dist(P.x,P.y,a.x,a.y)-dist(P.x,P.y,b.x,b.y);});for(var i=0;i<Math.min(4,sorted.length);i++){(function(e,d){setTimeout(function(){e.hp-=46*boost;e.fl=10;addP(e.x,e.y,'#fdcb6e',10,3);SPW.push({type:'ltng',x1:P.x,y1:P.y,x2:e.x,y2:e.y,l:14});},d);})(sorted[i],i*100);}}
+  else if(spn==='盾牌'){P.shield=1;P.shieldT=290;}
+  else if(spn==='冰凍'){for(var i=0;i<ENE.length;i++){if(dist(P.x,P.y,ENE[i].x,ENE[i].y)<260)ENE[i].frz=220;}}
+  toast(spn+'！');P.spells[idx]=null;
+  if(P.zodiac.id==='gemini'&&Math.random()<0.25)setTimeout(function(){if(P)castSpell(idx);},250);
+}
 
-            const saveOrderToHistory = () => {
-                const orderItems = currentDb.ingredients
-                    .map(item => ({
-                        name: item.name,
-                        qty: parseFloat(orderQuantities[item.id] || 0),
-                        unit: item.unit
-                    }))
-                    .filter(i => i.qty > 0);
-                if (orderItems.length === 0) return;
-                const newHistoryRecord = {
-                    id: Date.now(),
-                    date: orderDate,
-                    timestamp: new Date().toLocaleString(),
-                    items: orderItems
-                };
-                updateCurrentDb({ history: [...currentDb.history, newHistoryRecord] });
-            };
+function checkWallCollision(nx,ny,r){for(var i=0;i<WALLS.length;i++){var w=WALLS[i];if(nx>w.x-r&&nx<w.x+w.w+r&&ny>w.y-r&&ny<w.y+w.h+r)return true;}return false;}
+function getCanvasXY(t){var r=C.getBoundingClientRect();return{x:t.clientX-r.left,y:t.clientY-r.top};}
+function getMoveDir(){
+  if(isMobile){if(joy.on&&(joy.dx||joy.dy))return{x:joy.dx,y:joy.dy};return{x:0,y:0};}
+  var mx=0,my=0;
+  if(keys['ArrowLeft']||keys['a']||keys['A'])mx-=1;if(keys['ArrowRight']||keys['d']||keys['D'])mx+=1;
+  if(keys['ArrowUp']||keys['w']||keys['W'])my-=1;if(keys['ArrowDown']||keys['s']||keys['S'])my+=1;
+  if(mx||my){var m=Math.sqrt(mx*mx+my*my);return{x:mx/m,y:my/m};}return{x:0,y:0};
+}
 
-            const monthlyStats = React.useMemo(() => {
-                const stats = {};
-                const currentMonth = orderDate.substring(0, 7);
-                currentDb.history.forEach(record => {
-                    if (record.date.startsWith(currentMonth)) {
-                        record.items.forEach(item => {
-                            stats[item.name] = (stats[item.name] || 0) + item.qty;
-                        });
-                    }
-                });
-                return stats;
-            }, [currentDb.history, orderDate]);
+function handleSelClick(x,y){
+  var list=selStage===0?CLASSES:(selStage===1?ZODIACS:CHINESE);
+  var cols=4,bw=sc(144),bh=selStage===0?sc(82):sc(74),gap=sc(5);
+  var rows=Math.ceil(list.length/cols),totalH=rows*bh+(rows-1)*gap;
+  var totalW=cols*bw+(cols-1)*gap,sx=(W-totalW)/2,sy=(H-totalH)/2+sc(18);
+  for(var i=0;i<list.length;i++){var col=i%cols,row=Math.floor(i/cols),bx=sx+col*(bw+gap),by=sy+row*(bh+gap);if(x>=bx&&x<=bx+bw&&y>=by&&y<=by+bh){if(selStage===0){selClass=list[i];selStage=1;}else if(selStage===1){selZodiac=list[i];selStage=2;}else{selChinese=list[i];startGame();}return;}}
+}
 
-            const getComparisonData = (itemName) => {
-                const currentMonth = orderDate.substring(0, 7);
-                return branches.map(branch => {
-                    const db = storeDatabases[branch];
-                    let total = 0;
-                    db.history.forEach(record => {
-                        if (record.date.startsWith(currentMonth)) {
-                            const match = record.items.find(i => i.name === itemName);
-                            if (match) total += match.qty;
-                        }
-                    });
-                    return { branch, total };
-                });
-            };
+document.addEventListener('keydown',function(e){keys[e.key]=true;if(selStage!==3)return;if(showModal){if(e.key==='y'||e.key==='Y')confirmModal(true);if(e.key==='n'||e.key==='N')confirmModal(false);return;}if(dead)return;if(e.key===' '){e.preventDefault();castSpell(0);}if(e.key==='1')castSpell(0);if(e.key==='2')castSpell(1);if(e.key==='3')castSpell(2);if(e.key==='q'||e.key==='Q')doSkillA();if(e.key==='e'||e.key==='E')doSkillB();if(e.key==='r'||e.key==='R'){selStage=0;selClass=null;selZodiac=null;selChinese=null;dead=false;}});
+document.addEventListener('keyup',function(e){keys[e.key]=false;});
+C.addEventListener('mousemove',function(e){var r=C.getBoundingClientRect();mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top;});
+C.addEventListener('click',function(e){var r2=C.getBoundingClientRect();var cx=e.clientX-r2.left,cy=e.clientY-r2.top;if(selStage<3){handleSelClick(cx,cy);return;}if(dead){selStage=0;selClass=null;selZodiac=null;selChinese=null;dead=false;return;}if(showModal){var mw=sc(270),mh=sc(160),mx2=(W-mw)/2,my2=(H-mh)/2;var yb={x:mx2+sc(20),y:my2+sc(100),w:sc(95),h:sc(38)},nb={x:mx2+mw-sc(115),y:my2+sc(100),w:sc(95),h:sc(38)};if(inRect(yb,cx,cy))confirmModal(true);else if(inRect(nb,cx,cy))confirmModal(false);}});
+C.addEventListener('touchstart',function(ev){ev.preventDefault();var touches=ev.changedTouches;if(selStage<3){var t=touches[0];var p=getCanvasXY(t);handleSelClick(p.x,p.y);return;}if(dead){selStage=0;selClass=null;selZodiac=null;selChinese=null;dead=false;return;}if(showModal){var t=touches[0];var p=getCanvasXY(t);var mw=sc(270),mh=sc(160),mx2=(W-mw)/2,my2=(H-mh)/2;var yb={x:mx2+sc(20),y:my2+sc(100),w:sc(95),h:sc(38)},nb={x:mx2+mw-sc(115),y:my2+sc(100),w:sc(95),h:sc(38)};if(inRect(yb,p.x,p.y))confirmModal(true);else if(inRect(nb,p.x,p.y))confirmModal(false);return;}
+  var jb=joyCenter(),bl=getBtns();
+  for(var ti=0;ti<touches.length;ti++){var t=touches[ti];var p=getCanvasXY(t);var x=p.x,y=p.y;if(!joy.on&&dist(x,y,jb.cx,jb.cy)<jb.r*1.9&&x<W*0.48){joy={on:true,id:t.identifier,cx:jb.cx,cy:jb.cy,dx:0,dy:0};continue;}if(inRect(bl.dsh,x,y)){dashBtn={on:true,id:t.identifier};continue;}if(inRect(bl.shr,x,y)){shrBtn={on:true,id:t.identifier};continue;}if(inRect(bl.skA,x,y)){doSkillA();continue;}if(inRect(bl.skB,x,y)){doSkillB();continue;}if(inRect(bl.sp0,x,y)){castSpell(0);continue;}if(inRect(bl.sp1,x,y)){castSpell(1);continue;}if(inRect(bl.sp2,x,y)){castSpell(2);continue;}if(!aimT.on&&x>W*0.38){aimT={on:true,id:t.identifier,ox:x,oy:y,ang:P?P.sw.a:0,moved:false};}}
+},{passive:false});
+C.addEventListener('touchmove',function(ev){ev.preventDefault();var jb=joyCenter();for(var ti=0;ti<ev.changedTouches.length;ti++){var t=ev.changedTouches[ti];var p=getCanvasXY(t);if(t.identifier===joy.id){var dx=p.x-joy.cx,dy=p.y-joy.cy,d2=Math.sqrt(dx*dx+dy*dy);joy.dx=d2>jb.r?dx/d2:dx/jb.r;joy.dy=d2>jb.r?dy/d2:dy/jb.r;}if(t.identifier===aimT.id){var dx2=p.x-aimT.ox,dy2=p.y-aimT.oy;if(Math.sqrt(dx2*dx2+dy2*dy2)>sc(6)){aimT.ang=Math.atan2(dy2,dx2);aimT.moved=true;}}}},{passive:false});
+function onTE(ev){ev.preventDefault();for(var ti=0;ti<ev.changedTouches.length;ti++){var t=ev.changedTouches[ti];if(t.identifier===joy.id)joy={on:false,id:-1,cx:0,cy:0,dx:0,dy:0};if(t.identifier===aimT.id){aimT.on=false;aimT.id=-1;aimT.moved=false;}if(t.identifier===dashBtn.id)dashBtn={on:false,id:-1};if(t.identifier===shrBtn.id)shrBtn={on:false,id:-1};}}
+C.addEventListener('touchend',onTE,{passive:false});C.addEventListener('touchcancel',onTE,{passive:false});
 
-            const handleDragStart = (id) => setDraggedId(id);
-            const handleDragOver = (e, id) => { e.preventDefault(); if (id !== draggedId) setOverId(id); };
-            const handleDragEnd = () => {
-                if (draggedId !== null && overId !== null) {
-                    const newIngredients = [...currentDb.ingredients];
-                    const fromIndex = newIngredients.findIndex(i => i.id === draggedId);
-                    const toIndex = newIngredients.findIndex(i => i.id === overId);
-                    const [movedItem] = newIngredients.splice(fromIndex, 1);
-                    newIngredients.splice(toIndex, 0, movedItem);
-                    updateCurrentDb({ ingredients: newIngredients });
-                }
-                setDraggedId(null);
-                setOverId(null);
-            };
+function update(){
+  if(dead||showModal||selStage!==3)return;
+  frame++;
+  // Zodiac passives
+  var zod=P.zodiac,cn=P.chinese;
+  if(zod.id==='cancer'){P.tideAngle+=0.01*P.tideDir;if(P.tideAngle>1)P.tideDir=-1;if(P.tideAngle<0)P.tideDir=1;P.sw.rad=P.sw.baserad*(0.7+P.tideAngle*0.6);}
+  if(zod.id==='leo'){if(P.leoTimer>0)P.leoTimer--;else P.leoReady=true;}
+  if(zod.id==='aquarius'){for(var i=0;i<ITW.length;i++){var it=ITW[i];var d=dist(P.x,P.y,it.x,it.y);if(d<220&&d>1){it.x+=(P.x-it.x)/d*2.5;it.y+=(P.y-it.y)/d*2.5;}}}
+  if(cn.id==='horse'){var mv2=getMoveDir();var sp2=Math.sqrt(mv2.x*mv2.x+mv2.y*mv2.y);P.sw.as=P.classDef.as*(1+sp2*0.55);}
+  if(cn.id==='rooster'&&P.roosterTimer>0){P.roosterTimer--;P.sw.as=Math.max(P.sw.as,P.classDef.as*1.8);}
+  if(P.libra_speedTimer>0)P.libra_speedTimer--;if(P.pigInvTimer>0)P.pigInvTimer--;
+  if(zod.id==='capricorn'){var mvCap=getMoveDir();if(!mvCap.x&&!mvCap.y){P.capricornStill++;if(P.capricornStill>=60&&!P.capricornShield){P.capricornShield=1;toast('魔羯：靜止護盾！');}}else{P.capricornStill=0;}}
 
-            const groupedOrders = React.useMemo(() => {
-                const list = currentDb.ingredients
-                    .map(item => ({ ...item, orderQty: parseFloat(orderQuantities[item.id] || 0) }))
-                    .filter(i => i.orderQty > 0);
-                return list.reduce((acc, item) => {
-                    if (!acc[item.vendor]) acc[item.vendor] = [];
-                    acc[item.vendor].push(item);
-                    return acc;
-                }, {});
-            }, [currentDb.ingredients, orderQuantities]);
+  if(P.spd2>0)P.spd2--;if(P.poison>0){P.poison--;if(P.poison<=0)P.sw.poison=false;}
+  if(P.shield&&(--P.shieldT)<=0)P.shield=0;
+  if(P.dashCd>0)P.dashCd--;if(P.dashActive>0)P.dashActive--;if(P.parry>0)P.parry--;
+  if(P.skACd>0)P.skACd--;if(P.skBCd>0)P.skBCd--;if(P.skAActive>0)P.skAActive--;
+  if(P.skBActive>0){P.skBActive--;if(P.skBActive<=0&&P.classId==='crag')P.sw.rad=P.sw.baserad;}
+  if(P.phantomTimer>0){P.phantomTimer--;if(P.phantomTimer<=0)P._phantoms=[];}
+  if(P.focusedSight>0)P.focusedSight--;if(P.spiralCharge>0){P.spiralCharge--;if(P.spiralCharge<=0)P.dashActive=0;}
+  if(P.megaBladeTimer>0){P.megaBladeTimer--;P.megaBladeAngle+=0.06;}
+  if(P.vampireMode>0)P.vampireMode--;if(P.consecZone&&(--P.consecZone.timer<=0))P.consecZone=null;
+  if(P.classId==='weaver'&&P.skBActive>0){P.skBActive--;P.sw.dur=Math.max(0,P.sw.dur-0.3);}
+  // Heat effect
+  var heatFactor=(currentWeather&&currentWeather.id==='heat')?0.7:1;
+  var sandFactor=(currentWeather&&currentWeather.id==='sand')?1.2:1;
 
-            React.useEffect(() => {
-                if (view === 'result') {
-                    const initialTexts = {};
-                    const [y, m, d] = orderDate.split('-');
-                    const dateStr = `${parseInt(m)}/${parseInt(d)}`;
-                    Object.entries(groupedOrders).forEach(([vendor, items]) => {
-                        let text = `${selectedBranch} ${dateStr}\n`;
-                        items.forEach(item => { text += `${item.name}${item.orderQty}${item.unit}\n`; });
-                        initialTexts[vendor] = text.trim();
-                    });
-                    setEditedOrderTexts(initialTexts);
-                }
-            }, [view, groupedOrders, selectedBranch, orderDate]);
+  var shrinking=(isMobile?shrBtn.on:(keys['z']||keys['Z']))&&P.st>0;
+  if(shrinking&&frame%2===0)P.st=Math.max(0,P.st-0.7);
+  if(zod.id!=='cancer'){var tgtRad=shrinking?16:P.sw.baserad;if(P.classId==='lancer'&&P.spiralCharge>0)tgtRad=18;if(P.classId==='crag'&&P.skBActive>0)tgtRad=16;P.sw.rad+=(tgtRad-P.sw.rad)*0.12;}
+  if(!shrinking&&P.st<P.mst&&frame%3===0)P.st=Math.min(P.mst,P.st+0.42*heatFactor);
+  P.sw.a+=P.sw.as*(P.gearDir||1);if(P.sw2){P.sw2.rad=P.sw.rad;P.sw2.as=P.sw.as;P.sw2.a-=P.sw2.as;}
+  if(isMobile&&aimT.moved)P.sw.a=aimT.ang+frame*P.sw.as;
 
-            const handleTextChange = (vendor, newText) => {
-                setEditedOrderTexts(prev => ({ ...prev, [vendor]: newText }));
-            };
+  var mov=getMoveDir(),dashing=P.dashActive>0;
+  var spd=(P.spd2>0?P.spd*1.65:P.spd)*(dashing&&P.spiralCharge<=0?2.8:1)*(P.spiralCharge>0?2.6:1)*(P.libra_speedTimer>0?1.4:1)*(P.pigInvTimer>0?1.6:1);
+  var nx2=P.x,ny2=P.y;
+  if(dashing){nx2+=P.dashVx*spd;ny2+=P.dashVy*spd;}
+  else if(mov.x||mov.y){nx2+=mov.x*spd;ny2+=mov.y*spd;}
+  if(!checkWallCollision(nx2,ny2,P.r)){P.x=nx2;P.y=ny2;}else if(!checkWallCollision(nx2,P.y,P.r))P.x=nx2;else if(!checkWallCollision(P.x,ny2,P.r))P.y=ny2;
+  P.x=Math.max(60,Math.min(MAP.w-60,P.x));P.y=Math.max(60,Math.min(MAP.h-60,P.y));
 
-            const handleShare = async (vendorName) => {
-                saveOrderToHistory(); 
-                const text = editedOrderTexts[vendorName] || "";
-                const el = document.createElement('textarea');
-                el.value = text;
-                document.body.appendChild(el);
-                el.select();
-                document.execCommand('copy');
-                document.body.removeChild(el);
-                setCopyStatus({ ...copyStatus, [vendorName]: true });
-                setTimeout(() => setCopyStatus(prev => ({ ...prev, [vendorName]: false })), 3000);
-                if (navigator.share) {
-                    try { await navigator.share({ title: `訂貨單-${vendorName}`, text }); return; } catch (err) {}
-                }
-                window.location.href = `https://line.me/R/msg/text/?${encodeURIComponent(text)}`;
-            };
+  var dashPress=isMobile?dashBtn.on:(keys['Shift']||keys['shift']);
+  if(dashPress&&P.dashCd<=0&&P.st>=18&&(mov.x||mov.y)){P.dashActive=10;P.dashCd=38;P.st-=18;P.dashVx=mov.x;P.dashVy=mov.y;P.parry=14;addP(P.x,P.y,'#6c5ce7',9,3);if(isMobile)dashBtn={on:false,id:-1};if(zod.id==='aries')P.parry=22;}
 
-            const Nav = ({ title, onBack, rightAction }) => (
-                <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-4 flex items-center justify-between shadow-sm">
-                    <div className="flex items-center gap-3">
-                        {onBack && (
-                            <button onClick={onBack} className="w-10 h-10 bg-slate-100 rounded-xl active-scale btn-touch">
-                                <Icon name="ChevronLeft" className="text-slate-700 text-xl" />
-                            </button>
-                        )}
-                        <h1 className="text-lg font-black text-slate-800 tracking-tight">{title}</h1>
-                    </div>
-                    {rightAction}
-                </div>
-            );
+  MAP.camX+=(P.x-W/2-MAP.camX)*0.1;MAP.camY+=(P.y-H/2-MAP.camY)*0.1;
+  MAP.camX=Math.max(0,Math.min(MAP.w-W,MAP.camX));MAP.camY=Math.max(0,Math.min(MAP.h-H,MAP.camY));
 
-            return (
-                <div className="min-h-screen text-slate-900 pb-24 selection:bg-indigo-100 overflow-x-hidden fade-in">
-                    
-                    {/* 1. 設定頁面 */}
-                    {view === 'setup' && (
-                        <div className="max-w-md mx-auto px-6 pt-16">
-                            <div className="flex justify-center mb-10">
-                                <div className="bg-indigo-600 w-20 h-20 rounded-[2.5rem] shadow-2xl shadow-indigo-200 flex items-center justify-center rotate-3 font-black text-white text-3xl">
-                                    <Icon name="Package" className="text-4xl" />
-                                </div>
-                            </div>
-                            <h2 className="text-3xl font-black text-center text-slate-800 mb-1">智能分商點貨</h2>
-                            <p className="text-center text-slate-400 text-sm mb-10 font-medium">數據驅動 • 獨立資料庫</p>
+  // Scraps
+  for(var si=SCRAPS.length-1;si>=0;si--){var sc3=SCRAPS[si];if(dist(P.x,P.y,sc3.x,sc3.y)<30){P.scraps++;P.hardness=Math.min(P.hardness+2,30);SCRAPS.splice(si,1);addP(sc3.x,sc3.y,'#888',6,2);showItemPopup('武器碎片','硬度+2 ('+P.scraps+'片)','#b2bec3');}}
+  // Cracks
+  for(var ci=0;ci<CRACKS.length;ci++){var crack=CRACKS[ci];if(crack.explored)continue;crack.pulse+=0.07;if(dist(P.x,P.y,crack.x,crack.y)<P.r+crack.r){crack.explored=true;ITW.push({x:crack.x+30,y:crack.y,t:ITMS[4],r:18,pulse:0,special:true});toast('🌌 神秘裂縫！遺物出現！');addP(crack.x,crack.y,'#a29bfe',18,3);}}
+  // Traps
+  for(var ti=0;ti<TRAPS.length;ti++){var trap=TRAPS[ti];trap.ang+=0.09;trap.timer++;var ta=trap.type==='saw'||(trap.timer%80<40);if(!P.shield&&!dashing&&P.pigInvTimer<=0&&dist(P.x,P.y,trap.x,trap.y)<P.r+trap.r*0.7&&ta)P.hp-=0.9;}
+  // Items
+  var newI=[];for(var i=0;i<ITW.length;i++){ITW[i].pulse+=0.07;if(dist(P.x,P.y,ITW[i].x,ITW[i].y)<P.r+ITW[i].r)collectI(ITW[i]);else newI.push(ITW[i]);}ITW=newI;
+  // Reduced item spawn rate
+  iT++;if(iT>420){iT=0;spawnI();}
+  // Reduced enemy spawn rate
+  eT++;if(eT>Math.max(90,240-floorN*18)&&ENE.length<7+floorN*2){eT=0;spawnE();}
+  // Storm weather lightning
+  if(currentWeather&&currentWeather.id==='storm'&&frame%1200===0&&ENE.length>0){var target=ENE[Math.floor(Math.random()*ENE.length)];target.hp-=60;target.stun=40;target.fl=15;addP(target.x,target.y,'#fdcb6e',20,5);SPW.push({type:'ltng',x1:target.x,y1:target.y-200,x2:target.x,y2:target.y,l:18});toast('⚡ 雷暴擊中敵人！');}
 
-                            <div className="bg-white rounded-[3rem] shadow-xl border border-white overflow-hidden">
-                                <div className="flex flex-col">
-                                    <div className="bg-slate-50 px-8 py-5 border-b border-slate-100">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">選擇分店</label>
-                                        <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)} className="w-full bg-transparent border-none p-0 text-xl font-black outline-none mt-1 text-indigo-600">
-                                            {branches.map(b => <option key={b} value={b}>{b}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="px-8 py-5 border-b border-slate-100">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">進貨日期</label>
-                                        <input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} className="w-full bg-transparent border-none p-0 text-xl font-black outline-none mt-1" />
-                                    </div>
-                                    
-                                    <div className="p-8">
-                                        <button onClick={() => setView('zone_select')} className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-black text-lg shadow-xl flex items-center justify-center gap-3 active-scale transition-all">
-                                            開始點貨 <Icon name="ArrowRight" className="text-xl" />
-                                        </button>
-                                        
-                                        <div className="grid grid-cols-2 gap-3 mt-4">
-                                            <button onClick={() => setView('analytics')} className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 active-scale transition-all">
-                                                <Icon name="Chart" /> 數據分析報表
-                                            </button>
-                                            <button onClick={() => { setView('admin'); setAdminTab('ingredients'); }} className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 active-scale transition-all">
-                                                <Icon name="Settings" /> 店務管理後台
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+  var pTip=tipOf(P.x,P.y,P.sw);
+  for(var ei=ENE.length-1;ei>=0;ei--){
+    var e=ENE[ei];
+    if(e.frz>0){e.frz--;continue;}if(e.stun>0){e.stun--;continue;}
+    if(e.disarmed>0)e.disarmed--;
+    var sf=e.slow>0?0.42:1;if(e.slow>0)e.slow--;
+    var edx=P.x-e.x,edy=P.y-e.y,ed=dist(P.x,P.y,e.x,e.y)||1;
+    var enx=edx/ed,eny=edy/ed;
+    var nx3=e.x+enx*e.spd*sf+(e.vx||0),ny3=e.y+eny*e.spd*sf+(e.vy||0);
+    if(!checkWallCollision(nx3,ny3,e.r)){e.x=nx3;e.y=ny3;}
+    if(e.vx)e.vx*=0.88;if(e.vy)e.vy*=0.88;
+    if(e.disarmed<=0)e.sw.a+=e.sw.as;
+    if(e.fl>0)e.fl--;if(e.psn>0){e.psn--;if(e.psn%25===0)e.hp-=3;}
+    if(e.sw.corrosion&&frame%60===0)e.sw.dur=Math.max(0,e.sw.dur-8);
+    if(ed<P.r+e.r&&!P.shield&&!dashing&&P.pigInvTimer<=0)P.hp-=0.3;
+    var hitE=dist(pTip.x,pTip.y,e.x,e.y)<e.r+P.sw.len/2;
+    if(P.megaBladeTimer>0){var mbx=P.x+Math.cos(P.megaBladeAngle)*68,mby=P.y+Math.sin(P.megaBladeAngle)*68;hitE=hitE||dist(mbx,mby,e.x,e.y)<40;}
+    if(hitE){
+      var dmg=P.sw.atk*(P.sw.dur/P.sw.mdur)*(P.classId==='warden'?0.44:0.27);
+      if(P.megaBladeTimer>0)dmg*=2.2;
+      if(zod.id==='sagittarius')dmg*=1.2;
+      e.hp-=dmg;if(P.sw.poison)e.psn=150;e.fl=5;addP(pTip.x,pTip.y,'#e17055',3,2);
+      if(P.vampireMode>0){P.hp=Math.min(P.mhp,P.hp+3);}
+      if(P.consecZone&&dist(P.x,P.y,e.x,e.y)<P.consecZone.r)e.hp-=15;
+      if(P.classId==='hunter'&&Math.random()<0.25){var ha=Math.atan2(e.y-P.y,e.x-P.x);PROJ.push({x:pTip.x,y:pTip.y,vx:Math.cos(ha)*6,vy:Math.sin(ha)*6,r:6,col:'#fdcb6e',dmg:24,life:160,type:'arrow'});}
+      if(zod.id==='scorpio'&&Math.random()<0.15)e.sw.corrosion=true;
+    }
+    var eTip=tipOf(e.x,e.y,e.sw);
+    if(e.disarmed<=0&&!P.shield&&!dashing&&P.pigInvTimer<=0&&P.capricornShield<=0&&dist(eTip.x,eTip.y,P.x,P.y)<P.r+e.sw.len/2)P.hp-=e.sw.atk*0.10*(e.sw.dur/e.sw.mdur);
+    if(P.capricornShield>0&&e.disarmed<=0&&dist(eTip.x,eTip.y,P.x,P.y)<P.r+e.sw.len/2){P.capricornShield=0;addP(P.x,P.y,'#b2bec3',12,4);toast('魔羯護盾擋下！');}
 
-                    {/* 2. 區站選擇 - 已將按鈕往上移 */}
-                    {view === 'zone_select' && (
-                        <div className="max-w-md mx-auto">
-                            <Nav title={`${selectedBranch} - 區站`} onBack={() => setView('setup')} />
-                            <div className="p-6 space-y-6 pb-20">
-                                <div className="grid grid-cols-1 gap-4">
-                                    {currentDb.zones.map((zone) => {
-                                        const zoneItems = currentDb.ingredients.filter(i => i.zone === zone.name);
-                                        const activeCount = zoneItems.filter(i => (orderQuantities[i.id] || 0) > 0).length;
-                                        return (
-                                            <button key={zone.name} onClick={() => { setSelectedZone(zone.name); setView('inventory'); }} className={`p-5 rounded-[2.5rem] border transition-all active-scale flex items-center justify-between bg-white shadow-sm hover:border-indigo-200 ${activeCount > 0 ? 'border-indigo-200 ring-4 ring-indigo-50' : 'border-slate-100'}`}>
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`${zone.color} w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center font-black text-white text-2xl`}>
-                                                        <Icon name={zone.icon} />
-                                                    </div>
-                                                    <div className="text-left">
-                                                        <h3 className="font-black text-lg text-slate-800">{zone.name}</h3>
-                                                        <p className="text-xs font-bold text-slate-400">{activeCount > 0 ? `已點: ${activeCount} 項` : `清單共 ${zoneItems.length} 項`}</p>
-                                                    </div>
-                                                </div>
-                                                <Icon name="ChevronRight" className="text-slate-300 text-xl" />
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+    var collide=e.disarmed<=0&&dist(pTip.x,pTip.y,eTip.x,eTip.y)<P.sw.len/2+e.sw.len/2+6;
+    if(collide){
+      var noLoss=P.classId==='aegis'||(P.classId==='crag'&&P.skBActive>0);
+      var ariesBonus=zod.id==='aries'&&P.dashActive>0;
+      var inConsec=P.consecZone&&dist(P.x,P.y,e.x,e.y)<P.consecZone.r;
+      if(P.sw.explodeNext){addP((pTip.x+eTip.x)/2,(pTip.y+eTip.y)/2,'#fdcb6e',22,5);e.hp-=55;e.stun=32;P.sw.explodeNext=false;toast('💥 淬火爆炸！');}
+      if(P.parry>0||(P.classId==='aegis'&&P.skAActive>0)){
+        var isAC=P.classId==='aegis'&&P.skAActive>0;
+        e.sw.dur=Math.max(0,e.sw.dur-(isAC?65:18)*(ariesBonus?1.35:1));
+        if(isAC){e.disarmed=120;toast('盾擊！敵人失去武器！');}
+        var kd=Math.atan2(e.y-P.y,e.x-P.x),kb=4.5*(1+(P.sw.mass||1)*0.5);
+        e.vx=Math.cos(kd)*kb;e.vy=Math.sin(kd)*kb;e.stun=38+(P.classId==='crag'?22:0);
+        SPW.push({type:'parry',x:(pTip.x+eTip.x)/2,y:(pTip.y+eTip.y)/2,l:18});
+        addP((pTip.x+eTip.x)/2,(pTip.y+eTip.y)/2,'#fff',20,5.5);
+        if(!isAC)toast('✨ 完美架擋！');P.parry=0;P.skAActive=0;
+        if(zod.id==='leo'&&P.leoReady){for(var j=0;j<ENE.length;j++){if(dist(P.x,P.y,ENE[j].x,ENE[j].y)<220){ENE[j].stun=95;ENE[j].fl=12;}}SPW.push({type:'leo',x:P.x,y:P.y,l:45});P.leoReady=false;P.leoTimer=600;toast('♌ 震懾金光！');}
+      }else{
+        var tauB=zod.id==='taurus'?0.8:1.0;var dl=noLoss?0:(ariesBonus?0:(2.2-P.hardness*0.05)*tauB*sandFactor);
+        P.sw.dur=Math.max(0,P.sw.dur-Math.max(0.1,dl));
+        if(P.sw.glass&&P.sw.dur<=0){SCRAPS.push({x:P.x+25,y:P.y});P.sw.atk=10;P.sw.glass=false;P.sw.dur=20;P.sw.mdur=60;toast('💔 玻璃劍碎裂！');}
+        var pMass=P.sw.mass||1,eMass=e.sw.mass||1;
+        e.sw.dur=Math.max(0,e.sw.dur-(3.2+P.hardness*0.1+(P.classId==='flicker'?5:0)+(inConsec?10:0)));
+        if(cn.id==='snake'){e.sw.mass=Math.max(0.2,(e.sw.mass||1)*0.7);}
+        if(cn.id==='rat'&&Math.random()<0.10)P.hp=Math.min(P.mhp,P.hp+5);
+        if(cn.id==='sheep'&&Math.random()<0.15)P.hp=Math.min(P.mhp,P.hp+2);
+        if(zod.id==='libra'){if(eMass>pMass)P.libra_speedTimer=90;else if(eMass<pMass)e.sw.dur=Math.max(0,e.sw.dur-8);}
+        if(e.sw.dur<=0&&!e._scrapped){e._scrapped=true;SCRAPS.push({x:e.x+20,y:e.y});toast('💥 敵人武器碎裂！');if(cn.id==='tiger'){P.sw.atk=Math.floor(P.sw.atk*1.22);setTimeout(function(){if(P)P.sw.atk=Math.floor(P.sw.atk/1.22);},320);}if(zod.id==='scorpio')e.hp-=32;}
+        if(P.classId!=='warden'&&P.spiralCharge<=0)P.sw.a+=(Math.random()-0.5)*0.44;
+        e.sw.a+=(Math.random()-0.5)*0.48*pMass;addP((pTip.x+eTip.x)/2,(pTip.y+eTip.y)/2,'#fdcb6e',5,3);
+      }
+      if(P.monkeySwapReady){var tx3=P.x,ty3=P.y;P.x=e.x;P.y=e.y;e.x=tx3;e.y=ty3;P.monkeySwapReady=false;toast('🐒 位置交換！');}
+    }
+    for(var ti2=0;ti2<TRAPS.length;ti2++){var trap2=TRAPS[ti2];var ta2=trap2.type==='saw'||(trap2.timer%80<40);if(ta2&&dist(e.x,e.y,trap2.x,trap2.y)<e.r+trap2.r*0.8){e.hp-=3.5;e.fl=4;}}
+    if(e.hp<=0){addP(e.x,e.y,e.col,18,3.5);var xv=e.type==='boss'?32:e.type==='knight'?17:e.type==='goblin'?10:6;var eclipseXP=currentWeather&&currentWeather.id==='eclipse'?2:1;gainXP(xv*eclipseXP);score+=xv*13*(1+Math.floor(P.lv/3));P.kills++;if(P.kills%10===0)spawnI();ENE.splice(ei,1);}
+  }
 
-                                {/* 將「生成廠商訂單」按鈕從固定底部移至此處，緊跟在列表後方 */}
-                                {Object.keys(groupedOrders).length > 0 && (
-                                    <button 
-                                        onClick={() => setView('result')} 
-                                        className="w-full bg-green-600 text-white py-5 rounded-3xl font-black shadow-2xl flex items-center justify-center gap-2 active-scale transition-all mt-2"
-                                    >
-                                        <Icon name="ClipboardCheck" /> 生成廠商訂單 ({Object.keys(groupedOrders).length})
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
+  for(var pi2=PROJ.length-1;pi2>=0;pi2--){var proj=PROJ[pi2];proj.x+=proj.vx;proj.y+=proj.vy;proj.life--;if(proj.trail){proj.trail.push({x:proj.x,y:proj.y,l:13});for(var tli=proj.trail.length-1;tli>=0;tli--){if(--proj.trail[tli].l<=0)proj.trail.splice(tli,1);}}if(proj.type==='shuriken')proj.spin+=0.35;if(checkWallCollision(proj.x,proj.y,proj.r)){proj.life=0;continue;}for(var ei2=ENE.length-1;ei2>=0;ei2--){var e2=ENE[ei2];if(dist(proj.x,proj.y,e2.x,e2.y)<e2.r+proj.r){e2.hp-=proj.dmg;e2.fl=9;addP(e2.x,e2.y,proj.col,8,3.5);proj.life=0;break;}}if(proj.life<=0)PROJ.splice(pi2,1);}
+  for(var si2=SPW.length-1;si2>=0;si2--){if(--SPW[si2].l<=0)SPW.splice(si2,1);}
+  for(var pai=PARTS.length-1;pai>=0;pai--){var pp=PARTS[pai];pp.x+=pp.vx;pp.y+=pp.vy;pp.vx*=0.9;pp.vy*=0.9;if(--pp.l<=0)PARTS.splice(pai,1);}
+  if(score>=floorN*1100){floorN++;rollWeatherArena();toast(currentWeather.icon+' '+currentArena.name+'·'+currentWeather.name);spawnTraps();spawnCracks();for(var i=0;i<3;i++)spawnE();if(cn.id==='rooster')P.roosterTimer=900;}
+  if(P.hp<=0)dead=true;
+  document.getElementById('hpf').style.width=Math.max(0,P.hp/P.mhp*100).toFixed(0)+'%';document.getElementById('hpv').textContent=Math.max(0,Math.ceil(P.hp));
+  document.getElementById('stf').style.width=Math.max(0,P.st/P.mst*100).toFixed(0)+'%';document.getElementById('stv').textContent=Math.ceil(P.st);
+  document.getElementById('drf').style.width=Math.max(0,P.sw.dur/P.sw.mdur*100).toFixed(0)+'%';document.getElementById('drv').textContent=Math.ceil(P.sw.dur);
+  document.getElementById('inf').textContent='Lv'+P.lv+'·層'+floorN+'·殺'+P.kills;document.getElementById('scr').textContent=score+'分';
+}
 
-                    {/* 3. 食材點貨頁面 */}
-                    {view === 'inventory' && (
-                        <div className="max-w-md mx-auto">
-                            <Nav title={selectedZone} onBack={() => { setView('zone_select'); setSearchQuery(''); }} />
-                            <div className="bg-white/80 backdrop-blur-md sticky top-[61px] z-40 px-4 py-4 border-b border-slate-100 shadow-sm">
-                                <div className="relative">
-                                    <div className="absolute left-4 top-4 font-black text-slate-300"><Icon name="Search" /></div>
-                                    <input type="text" placeholder={`搜尋${selectedZone}...`} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none" />
-                                </div>
-                            </div>
-                            <div className="p-4 space-y-4 pb-40">
-                                {currentDb.ingredients.filter(i => i.zone === selectedZone && i.name.includes(searchQuery)).map((item) => {
-                                    const qty = orderQuantities[item.id] || 0;
-                                    const isDragging = draggedId === item.id;
-                                    const isOver = overId === item.id;
-                                    return (
-                                        <div key={item.id} draggable onDragStart={() => handleDragStart(item.id)} onDragOver={(e) => handleDragOver(e, item.id)} onDragEnd={handleDragEnd} className={`bg-white p-5 rounded-[2rem] border shadow-sm flex items-center justify-between transition-all duration-300 ${isDragging ? 'drag-ghost' : 'border-slate-100'} ${isOver ? 'border-indigo-400 translate-y-1 shadow-md' : ''}`}>
-                                            <div className="flex items-center gap-4 flex-1 min-w-0">
-                                                <div className="p-1.5 text-slate-300 drag-handle font-black text-xl"><Icon name="GripVertical" /></div>
-                                                <div className="flex-1 min-w-0">
-                                                    <h4 className="font-black text-slate-800 text-lg truncate leading-tight">{item.name}</h4>
-                                                    <p className="text-[10px] font-black text-indigo-500 uppercase mt-0.5">{item.vendor}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2 bg-slate-100/50 p-1.5 rounded-3xl shrink-0 ml-4">
-                                                <button onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: Math.max(0, cur - 1) }); }} className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center active-scale btn-touch text-slate-400 font-black text-2xl"><Icon name="Minus" /></button>
-                                                <div className="w-10 text-center">
-                                                    <span className={`text-xl font-black ${qty === 0 ? 'text-slate-300' : 'text-indigo-600'}`}>{qty}</span>
-                                                    <p className="text-[9px] text-slate-400 font-black">{item.unit}</p>
-                                                </div>
-                                                <button onClick={() => { const cur = parseFloat(orderQuantities[item.id] || 0); setOrderQuantities({ ...orderQuantities, [item.id]: cur + 1 }); }} className="w-12 h-12 bg-indigo-600 rounded-2xl shadow-lg flex items-center justify-center text-white active-scale btn-touch font-black text-2xl"><Icon name="Plus" /></button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                                <div className="mt-12 pt-6 border-t border-slate-200">
-                                    <button 
-                                        onClick={() => { setView('zone_select'); window.scrollTo(0,0); }}
-                                        className="w-full bg-white border-2 border-indigo-600 text-indigo-600 py-5 rounded-3xl font-black text-lg active-scale transition-all shadow-lg flex items-center justify-center gap-2"
-                                    >
-                                        <Icon name="ChevronLeft" /> 點貨完畢，返回區站選擇
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+// ── DRAW PLAYER CHARACTER (illustrated deer-ghost) ──
+function drawPlayer(cx,cy,r,col,flashT){
+  var s=r/20; // scale factor
+  X.save();X.translate(cx,cy);
+  // Fluffy body
+  X.beginPath();
+  // Main blob shape with jagged bottom
+  var bodyR=r*1.1;
+  X.moveTo(0,-bodyR);
+  for(var k=0;k<16;k++){
+    var a=(k/16)*Math.PI*2-Math.PI/2;
+    var rr=bodyR*(1+Math.sin(k*3+frame*0.05)*0.08);
+    if(k>10&&k<15)rr*=0.85; // jagged bottom
+    X.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);
+  }
+  X.closePath();
+  X.fillStyle=flashT>0?'#ffffff':'#f0f0f0';
+  X.shadowColor=col;X.shadowBlur=14;
+  X.fill();
+  X.strokeStyle='#1a1228';X.lineWidth=2.5*s;X.stroke();
+  X.shadowBlur=0;
+  // Fur texture (white shading)
+  X.fillStyle='rgba(255,255,255,0.6)';X.beginPath();X.ellipse(-r*0.15,-r*0.05,r*0.55,r*0.7,0.1,0,Math.PI*2);X.fill();
+  // Antlers
+  var antlerCol=flashT>0?'#fff':'#fff';
+  X.strokeStyle='#1a1228';X.lineWidth=2.2*s;X.lineCap='round';
+  // Left antler
+  X.beginPath();X.moveTo(-r*0.4,-r*0.85);X.lineTo(-r*0.55,-r*1.4);X.stroke();
+  X.beginPath();X.moveTo(-r*0.55,-r*1.4);X.lineTo(-r*0.75,-r*1.65);X.stroke();
+  X.beginPath();X.moveTo(-r*0.55,-r*1.4);X.lineTo(-r*0.35,-r*1.62);X.stroke();
+  // Right antler
+  X.beginPath();X.moveTo(r*0.4,-r*0.85);X.lineTo(r*0.55,-r*1.4);X.stroke();
+  X.beginPath();X.moveTo(r*0.55,-r*1.4);X.lineTo(r*0.75,-r*1.65);X.stroke();
+  X.beginPath();X.moveTo(r*0.55,-r*1.4);X.lineTo(r*0.35,-r*1.62);X.stroke();
+  // Antler fill (white)
+  X.fillStyle='#f8f8f8';X.strokeStyle='#1a1228';X.lineWidth=1.5*s;
+  // Eyes
+  X.fillStyle=flashT>0?'#e84355':'#1a1228';
+  X.beginPath();X.arc(-r*0.32,-r*0.1,r*0.18,0,Math.PI*2);X.fill();
+  X.beginPath();X.arc(r*0.32,-r*0.1,r*0.18,0,Math.PI*2);X.fill();
+  // Nose/mouth (w shape)
+  X.strokeStyle='#1a1228';X.lineWidth=1.5*s;X.lineCap='round';
+  X.beginPath();X.moveTo(-r*0.14,r*0.12);X.quadraticCurveTo(-r*0.05,r*0.22,0,r*0.14);X.quadraticCurveTo(r*0.05,r*0.22,r*0.14,r*0.12);X.stroke();
+  X.restore();
+}
 
-                    {/* 4. 結果頁面 */}
-                    {view === 'result' && (
-                        <div className="max-w-md mx-auto px-6">
-                            <Nav title="確認訂單並編輯" onBack={() => setView('zone_select')} />
-                            <div className="space-y-8 pb-32 mt-6">
-                                <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 text-xs font-bold text-amber-700 leading-relaxed">
-                                    提示：點擊「發送」後系統會自動保存此次叫貨紀錄至數據報表中。
-                                </div>
-                                {Object.keys(groupedOrders).length === 0 ? (
-                                    <div className="text-center py-24 bg-white rounded-[3rem] border border-dashed border-slate-200">
-                                        <div className="font-black text-slate-200 text-5xl mb-4">?</div>
-                                        <p className="text-slate-400 font-black">尚未叫貨</p>
-                                    </div>
-                                ) : (
-                                    Object.entries(groupedOrders).map(([vendor, items]) => (
-                                        <div key={vendor} className="bg-white rounded-[2.5rem] shadow-xl border border-white overflow-hidden animate-in zoom-in-95 duration-300">
-                                            <div className="p-6 bg-slate-900 flex items-center justify-between">
-                                                <div>
-                                                    <h3 className="text-white font-black text-xl">{vendor}</h3>
-                                                    <p className="text-indigo-300 text-[10px] font-bold uppercase mt-1 flex items-center gap-1"><Icon name="Edit" className="w-3 h-3" /> 文字框可編輯</p>
-                                                </div>
-                                                <div className="bg-white/10 px-4 py-1.5 rounded-full text-[10px] text-white font-black uppercase">{items.length} 項</div>
-                                            </div>
-                                            <div className="p-6 space-y-5">
-                                                <textarea className="editable-order-text no-scrollbar" rows={Math.max(4, (editedOrderTexts[vendor]?.split('\n').length || 0) + 1)} value={editedOrderTexts[vendor] || ""} onChange={(e) => handleTextChange(vendor, e.target.value)} />
-                                                <button onClick={() => handleShare(vendor)} className={`w-full py-5 rounded-2xl font-black flex items-center justify-center gap-3 shadow-lg active-scale transition-all ${copyStatus[vendor] ? 'bg-green-500 text-white' : 'bg-blue-600 text-white shadow-blue-100'}`}>
-                                                    <Icon name={copyStatus[vendor] ? "CheckCircle2" : "Share2"} /> {copyStatus[vendor] ? '紀錄已保存！已複製內容' : `發送訂單給 ${vendor}`}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    )}
+function drawEnemy(e,cx,cy){
+  var ec=e.frz>0?'#74b9ff':(e.fl>0?'#fff':e.col);
+  X.save();X.translate(cx,cy);
+  // Simple cute enemy shapes
+  if(e.type==='boss'){
+    X.fillStyle=ec;X.shadowColor=e.col;X.shadowBlur=15;
+    X.beginPath();for(var k=0;k<8;k++){var a=k/8*Math.PI*2;var rr=e.r*(1+Math.sin(frame*0.08+k)*0.12);X.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}X.closePath();X.fill();
+    X.strokeStyle='rgba(0,0,0,0.5)';X.lineWidth=2.5;X.stroke();X.shadowBlur=0;
+    X.fillStyle='rgba(0,0,0,0.8)';X.beginPath();X.arc(-e.r*0.3,-e.r*0.2,e.r*0.22,0,Math.PI*2);X.fill();
+    X.beginPath();X.arc(e.r*0.3,-e.r*0.2,e.r*0.22,0,Math.PI*2);X.fill();
+  }else{
+    X.fillStyle=ec;X.shadowColor=e.col;X.shadowBlur=10;
+    X.beginPath();X.arc(0,0,e.r,0,Math.PI*2);X.fill();
+    X.strokeStyle='rgba(0,0,0,0.4)';X.lineWidth=2;X.stroke();X.shadowBlur=0;
+    // Eyes
+    X.fillStyle='rgba(0,0,0,0.7)';
+    X.beginPath();X.arc(-e.r*0.3,-e.r*0.15,e.r*0.18,0,Math.PI*2);X.fill();
+    X.beginPath();X.arc(e.r*0.3,-e.r*0.15,e.r*0.18,0,Math.PI*2);X.fill();
+  }
+  X.restore();
+}
 
-                    {/* 數據分析報表頁面 */}
-                    {view === 'analytics' && (
-                        <div className="max-w-md mx-auto">
-                            <Nav title={`${selectedBranch} - 數據報表`} onBack={() => setView('setup')} />
-                            <div className="flex bg-white border-b border-slate-100 px-4 py-3 gap-2 sticky top-[61px] z-50 shadow-sm">
-                                <button onClick={() => setAnalyticsTab('monthly')} className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${analyticsTab === 'monthly' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}>每月匯總</button>
-                                <button onClick={() => setAnalyticsTab('comparison')} className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${analyticsTab === 'comparison' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}>分店需求比較</button>
-                            </div>
-                            <div className="p-6 space-y-6">
-                                {analyticsTab === 'monthly' && (
-                                    <div className="space-y-6 animate-in fade-in duration-300">
-                                        <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
-                                            <h3 className="font-black text-slate-800 text-lg mb-4 flex items-center gap-2"><Icon name="Calendar" className="text-indigo-600" /> {orderDate.substring(0,7)} 叫貨總量</h3>
-                                            <div className="space-y-3">
-                                                {Object.entries(monthlyStats).length === 0 ? (
-                                                    <p className="text-center py-10 text-slate-300 font-bold italic">本月尚無叫貨紀錄</p>
-                                                ) : (
-                                                    Object.entries(monthlyStats).map(([name, total]) => (
-                                                        <div key={name} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0">
-                                                            <span className="font-bold text-slate-600">{name}</span>
-                                                            <span className="font-black text-indigo-600 text-lg">{total} <span className="text-[10px] text-slate-400">當月累計</span></span>
-                                                        </div>
-                                                    ))
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="space-y-3">
-                                            <h4 className="px-4 font-black text-[10px] text-slate-400 uppercase tracking-widest">最近叫貨歷史</h4>
-                                            {currentDb.history.slice().reverse().map(record => (
-                                                <div key={record.id} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
-                                                    <div className="flex justify-between items-center mb-3">
-                                                        <span className="font-black text-slate-800">{record.date}</span>
-                                                        <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-full text-slate-400">{record.timestamp}</span>
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {record.items.map((item, idx) => (<span key={idx} className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg">{item.name}{item.qty}{item.unit}</span>))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                                {analyticsTab === 'comparison' && (
-                                    <div className="space-y-6 animate-in fade-in duration-300">
-                                        {Object.keys(monthlyStats).map(itemName => (
-                                            <div key={itemName} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
-                                                <h3 className="font-black text-slate-800 border-l-4 border-indigo-600 pl-3">{itemName} - 分店對比</h3>
-                                                <div className="space-y-4">
-                                                    {getComparisonData(itemName).map(data => {
-                                                        const max = Math.max(...getComparisonData(itemName).map(d => d.total)) || 1;
-                                                        const width = (data.total / max) * 100;
-                                                        return (
-                                                            <div key={data.branch} className="space-y-1">
-                                                                <div className="flex justify-between text-[11px] font-black uppercase tracking-tight">
-                                                                    <span className={data.branch === selectedBranch ? "text-indigo-600" : "text-slate-400"}>{data.branch}</span>
-                                                                    <span className="text-slate-800">{data.total} 單位</span>
-                                                                </div>
-                                                                <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
-                                                                    <div className={`h-full transition-all duration-1000 ${data.branch === selectedBranch ? 'bg-indigo-600' : 'bg-slate-300'}`} style={{ width: `${width}%` }}></div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        ))}
-                                        {Object.keys(monthlyStats).length === 0 && <p className="text-center py-20 text-slate-300 font-bold italic">尚無數據可供比較</p>}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
+function drawSword(ox,oy,sw2,baseCol,alpha){
+  alpha=alpha||1;var df=sw2.dur/sw2.mdur;
+  var swc=sw2.glass?'#a9e8ff':(df>0.6?(baseCol||'#e0e0f0'):df>0.3?'#fdcb6e':'#e84355');
+  var tp=tipOf(ox,oy,sw2),tx=tp.x-ox,ty=tp.y-oy,ang=Math.atan2(ty,tx);
+  if(sw2.glass){X.shadowColor='#a9e8ff';X.shadowBlur=12;}
+  if(sw2.explodeNext){X.shadowColor='#fdcb6e';X.shadowBlur=14;}
+  X.globalAlpha=alpha;
+  // Glowing sword trail
+  X.strokeStyle=swc+'44';X.lineWidth=8;X.lineCap='round';
+  X.beginPath();X.moveTo(ox+tx-Math.cos(ang)*sw2.len*0.55,oy+ty-Math.sin(ang)*sw2.len*0.55);X.lineTo(ox+tx+Math.cos(ang)*sw2.len*0.68,oy+ty+Math.sin(ang)*sw2.len*0.68);X.stroke();
+  // Main blade
+  X.strokeStyle=swc;X.lineWidth=4;
+  X.beginPath();X.moveTo(ox+tx-Math.cos(ang)*sw2.len*0.55,oy+ty-Math.sin(ang)*sw2.len*0.55);X.lineTo(ox+tx+Math.cos(ang)*sw2.len*0.68,oy+ty+Math.sin(ang)*sw2.len*0.68);X.stroke();
+  X.shadowBlur=0;
+  // Tip gem
+  X.fillStyle=swc;X.beginPath();X.arc(ox+tx,oy+ty,4,0,Math.PI*2);X.fill();
+  X.globalAlpha=1;
+}
 
-                    {/* 後台管理 */}
-                    {view === 'admin' && (
-                        <div className="max-w-md mx-auto">
-                            <Nav title={`${selectedBranch} - 管理`} onBack={() => setView('setup')} />
-                            <div className="flex bg-white border-b border-slate-100 px-4 py-3 gap-2 overflow-x-auto no-scrollbar shadow-sm sticky top-[61px] z-50">
-                                {[
-                                    { id: 'ingredients', label: '食材', icon: 'Layers' }, 
-                                    { id: 'vendors', label: '廠商', icon: 'Filter' }, 
-                                    { id: 'branches', label: '分店管理', icon: 'Building2' }
-                                ].map(tab => (
-                                    <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`px-5 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap ${adminTab === tab.id ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100'}`}>
-                                        <Icon name={tab.icon} /> {tab.label}
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="p-6 space-y-6 pb-20">
-                                {adminTab === 'ingredients' && (
-                                    <div className="space-y-6">
-                                        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
-                                            <h3 className="font-black text-slate-800 flex items-center gap-2"><Icon name="Plus" className="text-indigo-600" /> 新增食材</h3>
-                                            <input placeholder="食材名稱" className="w-full bg-slate-50 rounded-xl p-4 font-bold outline-none ring-1 ring-slate-100" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <select className="bg-slate-50 rounded-xl p-4 font-bold outline-none" value={newItem.vendor} onChange={e => setNewItem({...newItem, vendor: e.target.value})}>
-                                                    <option value="">選擇廠商</option>
-                                                    {currentDb.vendors.map(v => <option key={v} value={v}>{v}</option>)}
-                                                </select>
-                                                <select className="bg-slate-50 rounded-xl p-4 font-bold outline-none" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})}>
-                                                    {DEFAULT_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                                                </select>
-                                            </div>
-                                            <select className="w-full bg-slate-50 rounded-xl p-4 font-bold outline-none" value={newItem.zone} onChange={e => setNewItem({...newItem, zone: e.target.value})}>
-                                                {currentDb.zones.map(z => <option key={z.name} value={z.name}>{z.name}</option>)}
-                                            </select>
-                                            <button onClick={() => { if(newItem.name && newItem.vendor) { updateCurrentDb({ ingredients: [...currentDb.ingredients, { ...newItem, id: Date.now() }] }); setNewItem({ ...newItem, name: '' }); } }} className="w-full bg-indigo-600 text-white p-5 rounded-2xl font-black shadow-lg">確認新增</button>
-                                        </div>
-                                        <div className="bg-slate-200/50 p-4 rounded-3xl grid grid-cols-2 gap-2">
-                                            <select className="bg-white rounded-xl p-2 text-xs font-bold border-none shadow-sm" value={adminZoneFilter} onChange={e => setAdminZoneFilter(e.target.value)}><option value="全部">全部區站</option>{currentDb.zones.map(z => <option key={z.name} value={z.name}>{z.name}</option>)}</select>
-                                            <select className="bg-white rounded-xl p-2 text-xs font-bold border-none shadow-sm" value={adminVendorFilter} onChange={e => setAdminVendorFilter(e.target.value)}><option value="全部">全部廠商</option>{currentDb.vendors.map(v => <option key={v} value={v}>{v}</option>)}</select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            {currentDb.ingredients.filter(i => (adminZoneFilter === '全部' || i.zone === adminZoneFilter) && (adminVendorFilter === '全部' || i.vendor === adminVendorFilter)).slice().reverse().map(item => (
-                                                <div key={item.id} className="bg-white p-5 rounded-[2rem] flex justify-between items-center shadow-sm border border-slate-50">
-                                                    <div className="min-w-0 pr-4">
-                                                        <p className="font-black text-slate-700 truncate">{item.name}</p>
-                                                        <p className="text-[10px] font-bold text-slate-400 uppercase">{item.vendor} • {item.zone} • {item.unit}</p>
-                                                    </div>
-                                                    <button onClick={() => updateCurrentDb({ ingredients: currentDb.ingredients.filter(i => i.id !== item.id) })} className="bg-rose-50 text-rose-400 p-2.5 rounded-xl"><Icon name="Trash2" /></button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                                {adminTab === 'vendors' && (
-                                    <div className="space-y-6">
-                                        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex gap-3">
-                                            <input placeholder="新廠商名稱" className="flex-1 bg-slate-50 rounded-2xl p-4.5 font-bold outline-none ring-1 ring-slate-100 border-none" value={newVendorName} onChange={e => setNewVendorName(e.target.value)} />
-                                            <button onClick={() => { if(newVendorName) { updateCurrentDb({ vendors: [...currentDb.vendors, newVendorName] }); setNewVendorName(''); } }} className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增</button>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-3">{currentDb.vendors.map(v => (<div key={v} className="bg-white p-5 rounded-[1.5rem] flex justify-between items-center shadow-sm border border-slate-50"><span className="font-bold text-sm truncate">{v}</span><button onClick={() => updateCurrentDb({ vendors: currentDb.vendors.filter(i => i !== v) })} className="text-slate-300 hover:text-rose-500 font-black px-2"><Icon name="X" /></button></div>))}</div>
-                                    </div>
-                                )}
-                                {adminTab === 'branches' && (
-                                    <div className="space-y-8">
-                                        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex gap-3"><input placeholder="新分店" className="flex-1 bg-slate-50 rounded-2xl p-4.5 font-bold" value={newBranchName} onChange={e => setNewBranchName(e.target.value)} /><button onClick={() => { if(newBranchName && !storeDatabases[newBranchName]) { setStoreDatabases(prev => ({ ...prev, [newBranchName]: { ingredients: [...TEMPLATE_INGREDIENTS], zones: [...INITIAL_ZONES], vendors: ["預設廠商"], history: [] } })); setBranches(prev => [...prev, newBranchName]); setNewBranchName(''); } }} className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增分店</button></div>
-                                        <div className="space-y-2">{branches.map(b => (<div key={b} className="bg-white p-5 rounded-[1.5rem] flex justify-between items-center shadow-sm border border-slate-50 font-bold"><span>{b}</span><button onClick={() => { const newDb = { ...storeDatabases }; delete newDb[b]; setStoreDatabases(newDb); setBranches(prev => prev.filter(i => i !== b)); if (selectedBranch === b) setSelectedBranch(branches.find(i => i !== b)); }} className="text-slate-300 hover:text-rose-500"><Icon name="Trash2" /></button></div>))}</div>
-                                        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
-                                            <h3 className="font-black text-slate-800 flex items-center gap-2"><Icon name="LayoutGrid" className="text-indigo-600" /> {selectedBranch} 區站管理</h3>
-                                            <div className="flex gap-2"><input placeholder="新區站" className="flex-1 bg-slate-50 rounded-xl p-4 font-bold outline-none" value={newZoneName} onChange={e => setNewZoneName(e.target.value)} /><button onClick={() => { if(newZoneName) { updateCurrentDb({ zones: [...currentDb.zones, { name: newZoneName, icon: 'Package', color: 'bg-slate-500' }] }); setNewZoneName(''); } }} className="bg-slate-900 text-white px-6 rounded-xl font-black">新增</button></div>
-                                            <div className="grid grid-cols-2 gap-2">{currentDb.zones.map(z => (<div key={z.name} className="bg-slate-50 px-4 py-3 rounded-xl flex justify-between items-center text-xs font-bold text-slate-700 border border-slate-100"><span>{z.name}</span><button onClick={() => updateCurrentDb({ zones: currentDb.zones.filter(i => i.name !== z.name) })} className="text-slate-300 font-black px-2"><Icon name="X" /></button></div>))}</div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
+function drawBtn(b,label,col,active,cdFrac){
+  X.save();
+  // Pill button
+  X.fillStyle=active?col+'cc':col+'28';
+  X.strokeStyle=active?col:col+'55';X.lineWidth=1.5;
+  roundRect(b.x,b.y,b.w,b.h,b.h/2);X.fill();X.stroke();
+  if(cdFrac>0){X.fillStyle='rgba(0,0,0,0.45)';roundRect(b.x,b.y,b.w*cdFrac,b.h,b.h/2);X.fill();}
+  X.fillStyle=active?'#fff':col;X.font='bold '+sc(isMobile?9.5:8.5)+'px Nunito,sans-serif';X.textAlign='center';X.textBaseline='middle';X.fillText(label,b.x+b.w/2,b.y+b.h/2);
+  X.restore();
+}
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+function drawSelScreen(){
+  X.fillStyle='#1a1228';X.fillRect(0,0,W,H);
+  // Stars bg
+  for(var i=0;i<40;i++){X.fillStyle='rgba(255,255,255,'+(0.05+Math.random()*0.15)+')';X.beginPath();X.arc(Math.random()*W,Math.random()*H,1+Math.random()*1.5,0,Math.PI*2);X.fill();}
+  var titles=['✦ 選擇你的職業','☽ 選擇星座加護','🐉 選擇守護生肖'];
+  var subs=['8種職業各有不同的武器與技能','12星座被動天賦，影響戰鬥方式','12生肖守護靈，賦予獨特能力'];
+  X.fillStyle='#fff';X.font='bold '+sc(16)+'px Fredoka One,cursive';X.textAlign='center';X.fillText(titles[selStage],W/2,sc(20));
+  X.fillStyle='rgba(255,255,255,0.4)';X.font=sc(9)+'px Nunito,sans-serif';X.fillText(subs[selStage],W/2,sc(32));
+  var list=selStage===0?CLASSES:(selStage===1?ZODIACS:CHINESE);
+  var cols=4,bw=sc(142),bh=selStage===0?sc(82):sc(72),gap=sc(5);
+  var rows=Math.ceil(list.length/cols),totalH=rows*bh+(rows-1)*gap;
+  var totalW=cols*bw+(cols-1)*gap,sx=(W-totalW)/2,sy=(H-totalH)/2+sc(20);
+  for(var i=0;i<list.length;i++){
+    var item=list[i],col=i%cols,row=Math.floor(i/cols),bx=sx+col*(bw+gap),by=sy+row*(bh+gap);
+    // Card
+    X.fillStyle='rgba(255,255,255,0.05)';roundRect(bx,by,bw,bh,sc(10));X.fill();
+    X.strokeStyle=item.col+'66';X.lineWidth=1.5;roundRect(bx,by,bw,bh,sc(10));X.stroke();
+    // Top color bar
+    X.fillStyle=item.col+'33';roundRect(bx,by,bw,bh/3,sc(10));X.fill();
+    X.fillStyle=item.col;X.font='bold '+sc(11.5)+'px Nunito,sans-serif';X.textAlign='center';X.fillText((item.emoji||item.icon||'')+(item.name||''),bx+bw/2,by+sc(14));
+    if(selStage===0){
+      X.fillStyle='rgba(255,255,255,0.55)';X.font=sc(7.5)+'px Nunito,sans-serif';X.fillText('HP:'+item.hp+' ATK:'+item.atk+' Mass:'+item.mass,bx+bw/2,by+sc(30));
+      X.fillStyle=item.col+'dd';X.font='bold '+sc(7.5)+'px Nunito,sans-serif';X.fillText('Q:'+item.skA,bx+bw/2,by+sc(44));X.fillText('E:'+item.skB,bx+bw/2,by+sc(55));
+    }else{
+      X.fillStyle=item.col+'ee';X.font='bold '+sc(8)+'px Nunito,sans-serif';X.fillText((item.passive||''),bx+bw/2,by+sc(36));
+      X.fillStyle='rgba(255,255,255,0.5)';X.font=sc(7)+'px Nunito,sans-serif';
+      var dw=item.desc||'';X.fillText(dw.slice(0,20),bx+bw/2,by+sc(48));if(dw.length>20)X.fillText(dw.slice(20),bx+bw/2,by+sc(58));
+    }
+  }
+  if(selStage>0){X.fillStyle='rgba(255,255,255,0.25)';X.font=sc(8)+'px Nunito,sans-serif';X.textAlign='center';X.fillText('按R返回重選',W/2,H-sc(8));}
+}
+
+function drawWeatherOverlay(){
+  if(!currentWeather)return;
+  var id=currentWeather.id;
+  if(id==='fog'){X.fillStyle='rgba(180,190,200,'+weatherEffects.fog*0.22+')';X.fillRect(0,0,W,H);}
+  if(id==='rain'&&frame%3===0){for(var i=0;i<8;i++){X.strokeStyle='rgba(116,185,255,0.25)';X.lineWidth=1;X.beginPath();var rx=Math.random()*W,ry=Math.random()*H;X.moveTo(rx,ry);X.lineTo(rx-2,ry+10);X.stroke();}}
+  if(id==='sand'){X.fillStyle='rgba(253,203,110,'+0.08+')';X.fillRect(0,0,W,H);if(frame%2===0){for(var i=0;i<6;i++){X.fillStyle='rgba(253,203,110,0.3)';X.beginPath();X.arc(Math.random()*W,Math.random()*H,1,0,Math.PI*2);X.fill();}}}
+  if(id==='snow'&&frame%4===0){for(var i=0;i<5;i++){X.fillStyle='rgba(255,255,255,0.5)';X.beginPath();X.arc(Math.random()*W,Math.random()*H,1.5,0,Math.PI*2);X.fill();}}
+  if(id==='aurora'){var gr=X.createLinearGradient(0,0,W,H);gr.addColorStop(0,'rgba(253,121,168,0.05)');gr.addColorStop(0.5,'rgba(108,92,231,0.05)');gr.addColorStop(1,'rgba(0,184,148,0.05)');X.fillStyle=gr;X.fillRect(0,0,W,H);}
+  if(id==='eclipse'){X.fillStyle='rgba(50,40,60,0.18)';X.fillRect(0,0,W,H);}
+}
+
+function draw(){
+  X.clearRect(0,0,W,H);
+  if(selStage<3){drawSelScreen();return;}
+  var arena=currentArena||{floor:'#0d0d1a',wall:'#1a1a35',col:'#7F77DD'};
+  var camX=Math.floor(MAP.camX),camY=Math.floor(MAP.camY);
+  // Floor
+  X.fillStyle=arena.floor;X.fillRect(0,0,W,H);
+  // Grid
+  X.strokeStyle='rgba(255,255,255,0.04)';X.lineWidth=1;
+  var gsize=90,gsx=-(camX%gsize),gsy=-(camY%gsize);
+  for(var gx=gsx;gx<W;gx+=gsize){X.beginPath();X.moveTo(gx,0);X.lineTo(gx,H);X.stroke();}
+  for(var gy=gsy;gy<H;gy+=gsize){X.beginPath();X.moveTo(0,gy);X.lineTo(W,gy);X.stroke();}
+  // Walls
+  for(var i=0;i<WALLS.length;i++){var wall=WALLS[i];var wx2=wall.x-camX,wy2=wall.y-camY;if(wx2>W+20||wy2>H+20||wx2+wall.w<-20||wy2+wall.h<-20)continue;
+    X.fillStyle=arena.wall;X.fillRect(wx2,wy2,wall.w,wall.h);
+    X.strokeStyle='rgba(255,255,255,0.08)';X.lineWidth=1;X.strokeRect(wx2+1,wy2+1,wall.w-2,wall.h-2);}
+  // Consecration
+  if(P.consecZone){X.save();X.strokeStyle='#fdcb6e';X.lineWidth=2;X.globalAlpha=0.2+Math.sin(frame*0.07)*0.08;X.beginPath();X.arc(P.consecZone.x-camX,P.consecZone.y-camY,P.consecZone.r,0,Math.PI*2);X.stroke();X.fillStyle='rgba(253,203,110,0.05)';X.fill();X.globalAlpha=1;X.restore();}
+  // Traps
+  for(var i=0;i<TRAPS.length;i++){var trap=TRAPS[i];var tx2=trap.x-camX,ty2=trap.y-camY;if(tx2<-60||tx2>W+60||ty2<-60||ty2>H+60)continue;var ta=trap.type==='saw'||(trap.timer%80<40);X.save();X.translate(tx2,ty2);if(trap.type==='saw'){X.rotate(trap.ang);X.strokeStyle='rgba(255,255,255,0.3)';X.lineWidth=2;X.beginPath();X.arc(0,0,trap.r,0,Math.PI*2);X.stroke();for(var k=0;k<10;k++){var a=k/10*Math.PI*2;X.beginPath();X.moveTo(Math.cos(a)*trap.r*0.55,Math.sin(a)*trap.r*0.55);X.lineTo(Math.cos(a)*trap.r,Math.sin(a)*trap.r);X.stroke();}X.fillStyle='rgba(180,180,180,0.2)';X.beginPath();X.arc(0,0,trap.r*0.28,0,Math.PI*2);X.fill();}else{if(ta){X.shadowColor='#e17055';X.shadowBlur=16;}X.fillStyle=ta?'rgba(225,112,85,0.8)':'rgba(100,50,40,0.5)';X.beginPath();X.arc(0,0,trap.r*0.5,0,Math.PI*2);X.fill();X.strokeStyle=ta?'#fdcb6e':'rgba(100,50,40,0.3)';X.lineWidth=2;X.beginPath();X.arc(0,0,trap.r,0,Math.PI*2);X.stroke();X.shadowBlur=0;}X.restore();}
+  // Cracks
+  for(var i=0;i<CRACKS.length;i++){var crack=CRACKS[i];if(crack.explored)continue;var cx2=crack.x-camX,cy2=crack.y-camY;crack.pulse+=0.07;var ps=1+Math.sin(crack.pulse)*0.22;X.save();X.translate(cx2,cy2);X.scale(ps,ps);X.strokeStyle='#a29bfe';X.lineWidth=2.5;X.globalAlpha=0.7+Math.sin(crack.pulse)*0.25;for(var k=0;k<3;k++){var a=k/3*Math.PI*2+crack.pulse*0.5;X.beginPath();X.moveTo(0,0);X.lineTo(Math.cos(a)*crack.r,Math.sin(a)*crack.r);X.stroke();}X.globalAlpha=1;X.restore();}
+  // Scraps
+  for(var i=0;i<SCRAPS.length;i++){var scr=SCRAPS[i];var sx2=scr.x-camX,sy2=scr.y-camY;if(sx2<-20||sx2>W+20||sy2<-20||sy2>H+20)continue;X.fillStyle='#888';X.strokeStyle='rgba(255,255,255,0.3)';X.lineWidth=1;X.beginPath();X.arc(sx2,sy2,6,0,Math.PI*2);X.fill();X.stroke();}
+  // Spell effects
+  for(var i=0;i<SPW.length;i++){var sv=SPW[i];if(sv.type==='ltng'){X.save();X.strokeStyle='#fdcb6e';X.lineWidth=3;X.globalAlpha=sv.l/14;X.shadowColor='#fdcb6e';X.shadowBlur=8;X.beginPath();X.moveTo(sv.x1-camX,sv.y1-camY);X.lineTo(sv.x2-camX,sv.y2-camY);X.stroke();X.globalAlpha=1;X.restore();}if(sv.type==='parry'){X.save();X.globalAlpha=sv.l/18;X.strokeStyle='#fff';X.lineWidth=2;for(var k=0;k<6;k++){var a=k/6*Math.PI*2;X.beginPath();X.moveTo(sv.x-camX,sv.y-camY);X.lineTo(sv.x-camX+Math.cos(a)*sv.l*18,sv.y-camY+Math.sin(a)*sv.l*18);X.stroke();}X.globalAlpha=1;X.restore();}if(sv.type==='leo'){X.save();X.globalAlpha=sv.l/45;X.fillStyle='#ffd32a';X.beginPath();X.arc(sv.x-camX,sv.y-camY,sv.l*5,0,Math.PI*2);X.fill();X.globalAlpha=1;X.restore();}}
+  // Items (illustrated)
+  for(var i=0;i<ITW.length;i++){var it=ITW[i];var ix=it.x-camX,iy=it.y-camY;if(ix<-30||ix>W+30||iy<-30||iy>H+30)continue;var ps=1+Math.sin(it.pulse)*0.14;X.save();X.translate(ix,iy);X.scale(ps,ps);
+    // Glow
+    X.shadowColor=it.t.col;X.shadowBlur=12;
+    if(it.special){X.strokeStyle=it.t.col;X.lineWidth=2;X.globalAlpha=0.5+Math.sin(it.pulse*2)*0.3;X.beginPath();X.arc(0,0,it.r*1.5,0,Math.PI*2);X.stroke();X.globalAlpha=1;}
+    X.fillStyle=it.t.col+'30';X.beginPath();X.arc(0,0,it.r,0,Math.PI*2);X.fill();
+    X.strokeStyle=it.t.col;X.lineWidth=2;X.beginPath();X.arc(0,0,it.r,0,Math.PI*2);X.stroke();
+    X.font=Math.round(it.r*1.1)+'px serif';X.textAlign='center';X.textBaseline='middle';X.shadowBlur=0;X.fillStyle='#fff';X.fillText(it.t.e,0,2);
+    X.restore();}
+  // Projectiles
+  for(var i=0;i<PROJ.length;i++){var proj=PROJ[i];var prx=proj.x-camX,pry=proj.y-camY;if(prx<-20||prx>W+20||pry<-20||pry>H+20)continue;if(proj.trail){for(var ti=0;ti<proj.trail.length;ti++){X.globalAlpha=proj.trail[ti].l/13*0.35;X.fillStyle=proj.col;X.beginPath();X.arc(proj.trail[ti].x-camX,proj.trail[ti].y-camY,proj.r*0.5,0,Math.PI*2);X.fill();}}X.globalAlpha=1;X.save();X.translate(prx,pry);X.fillStyle=proj.col;X.shadowColor=proj.col;X.shadowBlur=8;if(proj.type==='shuriken'){X.rotate(proj.spin||0);X.beginPath();for(var k=0;k<4;k++){var a=k/4*Math.PI*2;X.moveTo(0,0);X.lineTo(Math.cos(a)*proj.r,Math.sin(a)*proj.r);}X.strokeStyle=proj.col;X.lineWidth=2.5;X.stroke();}else if(proj.type==='arrow'){X.save();X.rotate(Math.atan2(proj.vy,proj.vx));X.fillRect(-10,-2.5,20,5);X.restore();}else{X.beginPath();X.arc(0,0,proj.r,0,Math.PI*2);X.fill();}X.shadowBlur=0;X.restore();}
+  X.globalAlpha=1;
+  // Particles
+  for(var i=0;i<PARTS.length;i++){var pp=PARTS[i];var px2=pp.x-camX,py2=pp.y-camY;if(px2<-10||px2>W+10||py2<-10||py2>H+10)continue;X.globalAlpha=pp.l/38;X.fillStyle=pp.c;X.beginPath();X.arc(px2,py2,pp.r,0,Math.PI*2);X.fill();}X.globalAlpha=1;
+  // Enemies
+  for(var i=0;i<ENE.length;i++){var e=ENE[i];var ex2=e.x-camX,ey2=e.y-camY;if(ex2<-60||ex2>W+60||ey2<-60||ey2>H+60)continue;
+    if(e.frz>0){X.globalAlpha=0.5;X.fillStyle='rgba(116,185,255,0.3)';X.beginPath();X.arc(ex2,ey2,e.r+8,0,Math.PI*2);X.fill();X.globalAlpha=1;}
+    if(e.stun>0){X.strokeStyle='#fdcb6e';X.lineWidth=2;X.globalAlpha=0.6;X.beginPath();X.arc(ex2,ey2,e.r+8,0,Math.PI*2);X.stroke();X.globalAlpha=1;}
+    drawEnemy(e,ex2,ey2);
+    if(e.disarmed<=0)drawSword(ex2,ey2,e.sw,e.col,1);
+    var hf=e.hp/e.mhp;
+    X.fillStyle='rgba(0,0,0,0.5)';roundRect(ex2-e.r,ey2-e.r-12,e.r*2,6,3);X.fill();
+    X.fillStyle=hf>0.5?'#00b894':hf>0.25?'#fdcb6e':'#e84355';roundRect(ex2-e.r,ey2-e.r-12,e.r*2*hf,6,3);X.fill();}
+  // Player
+  var px3=P.x-camX,py3=P.y-camY,dashing=P.dashActive>0;
+  if(P.shield&&P.shieldT>0){X.strokeStyle='#74b9ff';X.lineWidth=3;X.globalAlpha=0.5+Math.sin(frame*0.2)*0.3;X.shadowColor='#74b9ff';X.shadowBlur=12;X.beginPath();X.arc(px3,py3,P.r+14,0,Math.PI*2);X.stroke();X.shadowBlur=0;X.globalAlpha=1;}
+  if(P.capricornShield>0){X.strokeStyle='#b2bec3';X.lineWidth=3;X.globalAlpha=0.7;X.beginPath();X.arc(px3,py3,P.r+18,0,Math.PI*2);X.stroke();X.globalAlpha=1;}
+  if(P.pigInvTimer>0){X.strokeStyle='#fd79a8';X.lineWidth=3;X.globalAlpha=0.6+Math.sin(frame*0.35)*0.3;X.beginPath();X.arc(px3,py3,P.r+16,0,Math.PI*2);X.stroke();X.globalAlpha=1;}
+  if(P.vampireMode>0){X.fillStyle='rgba(0,184,148,0.15)';X.beginPath();X.arc(px3,py3,P.r+10,0,Math.PI*2);X.fill();}
+  if(dashing){addP(P.x,P.y,P.classCol,2,1.5);}
+  drawPlayer(px3,py3,P.r,P.classCol,0);
+  drawSword(px3,py3,P.sw,P.classCol,1);if(P.sw2)drawSword(px3,py3,P.sw2,'#fd79a8',1);
+  // Mega blade
+  if(P.megaBladeTimer>0){var mba=P.megaBladeAngle,mblen=72;X.strokeStyle='#ffd32a';X.lineWidth=8;X.lineCap='round';X.shadowColor='#ffd32a';X.shadowBlur=18;X.globalAlpha=0.9;X.beginPath();X.moveTo(px3-Math.cos(mba)*mblen*0.3,py3-Math.sin(mba)*mblen*0.3);X.lineTo(px3+Math.cos(mba)*mblen,py3+Math.sin(mba)*mblen);X.stroke();X.shadowBlur=0;X.globalAlpha=1;}
+  // Orbit ring
+  X.strokeStyle=P.classCol+'40';X.lineWidth=1;X.setLineDash([4,6]);X.beginPath();X.arc(px3,py3,P.sw.rad,0,Math.PI*2);X.stroke();X.setLineDash([]);
+  // Leo indicator
+  if(P.zodiac.id==='leo'&&P.leoReady){X.strokeStyle='#ffd32a';X.lineWidth=2;X.globalAlpha=0.6+Math.sin(frame*0.22)*0.35;X.setLineDash([3,4]);X.beginPath();X.arc(px3,py3,P.sw.rad+12,0,Math.PI*2);X.stroke();X.setLineDash([]);X.globalAlpha=1;}
+  // Mouse cursor (desktop)
+  if(!isMobile){X.fillStyle='rgba(255,255,255,0.6)';X.beginPath();X.arc(mouse.x,mouse.y,4,0,Math.PI*2);X.fill();X.strokeStyle='rgba(255,255,255,0.25)';X.lineWidth=1;X.beginPath();X.arc(mouse.x,mouse.y,9,0,Math.PI*2);X.stroke();}
+  // Weather overlay
+  drawWeatherOverlay();
+  // Buttons
+  var bl=getBtns(),shrinking=(isMobile?shrBtn.on:(keys['z']||keys['Z']))&&P.st>0;
+  if(!isMobile){
+    for(var i=0;i<3;i++){var spn=P.spells[i];var def=null;for(var j=0;j<SPELLS.length;j++){if(SPELLS[j].n===spn){def=SPELLS[j];break;}}var spBtns=[bl.sp0,bl.sp1,bl.sp2];drawBtn(spBtns[i],def?(def.e+' '+def.n):('法術'+(i+1)),def?def.col:'#636e72',false,0);}
+    drawBtn(bl.skA,'Q:'+P.classDef.skA,P.classCol,P.skAActive>0,P.skACd>0?P.skACd/250:0);
+    drawBtn(bl.skB,'E:'+P.classDef.skB,P.classCol+'cc',P.skBActive>0,P.skBCd>0?P.skBCd/300:0);
+    drawBtn(bl.shr,'縮刀[Z]','#00b894',shrinking,0);drawBtn(bl.dsh,'衝刺[⇧]','#6c5ce7',(keys['Shift']||keys['shift'])&&P.dashCd<=0,0);
+  }else{
+    var jb=joyCenter();
+    X.strokeStyle='rgba(255,255,255,0.15)';X.lineWidth=2;X.beginPath();X.arc(jb.cx,jb.cy,jb.r,0,Math.PI*2);X.stroke();
+    X.fillStyle='rgba(255,255,255,0.06)';X.beginPath();X.arc(jb.cx,jb.cy,jb.r,0,Math.PI*2);X.fill();
+    if(joy.on&&(joy.dx||joy.dy)){var jdm=Math.sqrt(joy.dx*joy.dx+joy.dy*joy.dy)||1,cl=Math.min(Math.sqrt(joy.dx*joy.dx+joy.dy*joy.dy),1)*jb.r;X.fillStyle='rgba(255,255,255,0.4)';X.beginPath();X.arc(jb.cx+joy.dx/jdm*cl,jb.cy+joy.dy/jdm*cl,jb.r*0.38,0,Math.PI*2);X.fill();}else{X.fillStyle='rgba(255,255,255,0.2)';X.beginPath();X.arc(jb.cx,jb.cy,jb.r*0.32,0,Math.PI*2);X.fill();}
+    for(var i=0;i<3;i++){var spn2=P.spells[i];var def2=null;for(var j=0;j<SPELLS.length;j++){if(SPELLS[j].n===spn2){def2=SPELLS[j];break;}}var sp2b=[bl.sp0,bl.sp1,bl.sp2];drawBtn(sp2b[i],def2?(def2.e+' '+def2.n):('法術'+(i+1)),def2?def2.col:'#636e72',false,0);}
+    drawBtn(bl.skA,P.classDef.skA,P.classCol,P.skAActive>0,P.skACd>0?P.skACd/250:0);
+    drawBtn(bl.skB,P.classDef.skB,P.classCol+'cc',P.skBActive>0,P.skBCd>0?P.skBCd/300:0);
+    drawBtn(bl.shr,'縮刀','#00b894',shrBtn.on,0);drawBtn(bl.dsh,'衝刺','#6c5ce7',dashBtn.on&&P.dashCd<=0,0);
+  }
+  // Minimap
+  var mm={x:W-sc(78),y:sc(6),w:sc(72),h:sc(48)};
+  X.fillStyle='rgba(0,0,0,0.55)';roundRect(mm.x,mm.y,mm.w,mm.h,5);X.fill();X.strokeStyle='rgba(255,255,255,0.12)';X.lineWidth=1;roundRect(mm.x,mm.y,mm.w,mm.h,5);X.stroke();
+  X.fillStyle=arena.col+'66';var mpx=mm.x+(P.x/MAP.w)*mm.w,mpy=mm.y+(P.y/MAP.h)*mm.h;X.beginPath();X.arc(mpx,mpy,3.5,0,Math.PI*2);X.fill();
+  for(var i=0;i<ENE.length;i++){var emx=mm.x+(ENE[i].x/MAP.w)*mm.w,emy=mm.y+(ENE[i].y/MAP.h)*mm.h;X.fillStyle=ENE[i].col+'99';X.fillRect(emx-1.5,emy-1.5,3,3);}
+  // Modal
+  if(showModal){
+    X.fillStyle='rgba(0,0,0,0.7)';X.fillRect(0,0,W,H);
+    var mw=sc(280),mh=sc(165),mx2=(W-mw)/2,my2=(H-mh)/2;
+    X.fillStyle='#1a1228';roundRect(mx2,my2,mw,mh,sc(14));X.fill();X.strokeStyle=showModal.type==='grinder'?'rgba(253,203,110,0.5)':'rgba(212,83,126,0.5)';X.lineWidth=2;roundRect(mx2,my2,mw,mh,sc(14));X.stroke();
+    var mt=showModal.type==='grinder'?'👴 磨刀老人':'🎲 賭博祭壇',md=showModal.type==='grinder'?'失去20最大HP\n換取劍攻擊永久+8':'武器攻擊×2.5\n但變成脆弱玻璃劍',mc=showModal.type==='grinder'?'#fdcb6e':'#fd79a8';
+    X.fillStyle=mc;X.font='bold '+sc(15)+'px Fredoka One,cursive';X.textAlign='center';X.fillText(mt,W/2,my2+sc(30));
+    X.fillStyle='rgba(255,255,255,0.7)';X.font=sc(11)+'px Nunito,sans-serif';var mlines=md.split('\n');for(var li=0;li<mlines.length;li++)X.fillText(mlines[li],W/2,my2+sc(54)+li*sc(18));
+    var yb={x:mx2+sc(22),y:my2+sc(106),w:sc(98),h:sc(40)},nb={x:mx2+mw-sc(120),y:my2+sc(106),w:sc(98),h:sc(40)};
+    X.fillStyle='rgba(0,184,148,0.25)';roundRect(yb.x,yb.y,yb.w,yb.h,sc(8));X.fill();X.strokeStyle='#00b894';X.lineWidth=1.5;roundRect(yb.x,yb.y,yb.w,yb.h,sc(8));X.stroke();X.fillStyle='#00b894';X.font='bold '+sc(12)+'px Nunito,sans-serif';X.textAlign='center';X.textBaseline='middle';X.fillText('接受 [Y]',yb.x+yb.w/2,yb.y+yb.h/2);
+    X.fillStyle='rgba(232,67,85,0.25)';roundRect(nb.x,nb.y,nb.w,nb.h,sc(8));X.fill();X.strokeStyle='#e84355';X.lineWidth=1.5;roundRect(nb.x,nb.y,nb.w,nb.h,sc(8));X.stroke();X.fillStyle='#e84355';X.fillText('拒絕 [N]',nb.x+nb.w/2,nb.y+nb.h/2);
+  }
+  if(dead){
+    X.fillStyle='rgba(0,0,0,0.8)';X.fillRect(0,0,W,H);
+    X.fillStyle='#e84355';X.font='bold '+sc(28)+'px Fredoka One,cursive';X.textAlign='center';X.fillText('冠鹿倒下了',W/2,H/2-sc(36));
+    X.fillStyle='#fdcb6e';X.font='bold '+sc(14)+'px Nunito,sans-serif';X.fillText('分數：'+score+'　層：'+floorN+'　擊殺：'+P.kills,W/2,H/2+sc(6));
+    X.fillStyle='rgba(255,255,255,0.4)';X.font=sc(11)+'px Nunito,sans-serif';X.fillText(isMobile?'點擊重新選擇角色':'按 R 重新選擇角色',W/2,H/2+sc(34));
+  }
+}
+
+window.addEventListener('resize',function(){resize();});
+function loop(){update();draw();requestAnimationFrame(loop);}
+resize();loop();
+</script>
